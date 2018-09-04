@@ -6,9 +6,9 @@ import (
 )
 
 type options struct {
-	inExtension  message.Extension
-	outExtension message.Extension
-	transport    transport.Transport
+	inExt     message.Extension
+	outExt    message.Extension
+	transport transport.Transport
 }
 
 var defaultOpts = options{
@@ -35,6 +35,16 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 	c.opts = defaultOpts
 	for _, opt := range opts {
 		opt(&c.opts)
+	}
+	tops := &transport.Options{
+		Url:    url,
+		InExt:  c.opts.inExt,
+		OutExt: c.opts.outExt,
+	}
+
+	err := c.opts.transport.Init(tops)
+	if err != nil {
+		return nil, err
 	}
 	return &c, nil
 }
