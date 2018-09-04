@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 )
 
+const transportName = "websocket"
+
 func init() {
 	transport.RegisterTransport(&Websocket{})
 }
@@ -36,7 +38,7 @@ func (w *Websocket) Init(options *transport.Options) error {
 	return nil
 }
 func (w *Websocket) Name() string {
-	return "websocket"
+	return transportName
 }
 func (w *Websocket) nextMsgID() string {
 	return strconv.Itoa(int(atomic.AddUint64(w.msgID, 1)))
@@ -49,7 +51,7 @@ func (w *Websocket) Handshake() (err error) {
 	if err = w.conn.WriteJSON(append(nil, message.Message{
 		Channel:                  string(transport.Handshake),
 		Version:                  "1.0", //todo const
-		SupportedConnectionTypes: []string{"websocket"},
+		SupportedConnectionTypes: []string{transportName},
 	})); err != nil {
 		return err
 	}
@@ -68,7 +70,13 @@ func (w *Websocket) Handshake() (err error) {
 }
 
 func (w *Websocket) Connect() error {
-	panic("not implemented")
+	//todo verify if extensions are applied on connect,verify if hs is complete
+	return w.conn.WriteJSON(append(nil, message.Message{
+		Channel:        string(transport.Connect),
+		ClientId:       w.clientID,
+		ConnectionType: transportName,
+		Id:             w.nextMsgID(),
+	}))
 }
 
 func (w *Websocket) Subscribe(subscription string, onMessage func(message *message.Message)) error {

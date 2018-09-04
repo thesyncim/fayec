@@ -8,6 +8,7 @@ type Message struct {
 	Channel                  string      `json:"channel,omitempty"`
 	Version                  string      `json:"version,omitempty"`
 	SupportedConnectionTypes []string    `json:"supportedConnectionTypes,omitempty"`
+	ConnectionType           string      `json:"connectionType,omitempty"`
 	MinimumVersion           string      `json:"minimumVersion,omitempty"`
 	Successful               bool        `json:"successful,omitempty"`
 	Ext                      interface{} `json:"ext,omitempty"`

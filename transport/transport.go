@@ -27,6 +27,7 @@ type Event string
 
 const (
 	Subscribe   Event = "/meta/subscribe"
+	Connect     Event = "/meta/connect"
 	Unsubscribe Event = "/meta/unsubscribe"
 	Handshake   Event = "/meta/handshake"
 	Disconnect  Event = "/meta/disconnect"
