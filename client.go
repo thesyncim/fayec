@@ -3,6 +3,7 @@ package fayec
 import (
 	"github.com/thesyncim/faye/message"
 	"github.com/thesyncim/faye/transport"
+	_ "github.com/thesyncim/faye/transport/websocket"
 )
 
 type options struct {
