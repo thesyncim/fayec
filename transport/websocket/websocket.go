@@ -63,8 +63,24 @@ func (w *Websocket) readWorker() error {
 		msg := payload[0]
 
 		if transport.IsControlMsg(msg.Channel) {
-			//handle it
+
 			log.Println("recv control message", debugJson(msg))
+
+			//handle it
+			switch msg.Channel {
+			case transport.Subscribe:
+				//handle Subscribe resp
+			case transport.Unsubscribe:
+				//handle Unsubscribe resp
+			case transport.Connect:
+				//handle Connect resp
+
+			case transport.Disconnect:
+				//handle Disconnect resp
+
+			case transport.Handshake:
+				//handle Handshake resp
+			}
 
 			continue
 		}
@@ -77,7 +93,6 @@ func (w *Websocket) readWorker() error {
 			subscription <- &msg
 		}
 	}
-
 }
 
 func (w *Websocket) Name() string {
