@@ -7,7 +7,6 @@ import (
 	"github.com/thesyncim/faye/transport"
 	"log"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -62,15 +61,21 @@ func (w *Websocket) readWorker() error {
 		}
 		//dispatch
 		msg := payload[0]
-		if strings.HasPrefix(msg.Channel, "/meta") {
-			continue //todo update introspect message and update state
+
+		if transport.IsControlMsg(msg.Channel) {
+			//handle it
+			log.Println("recv control message", debugJson(msg))
+
+			continue
 		}
 
 		w.subsMu.Lock()
 		subscription := w.subs[msg.Channel]
 		w.subsMu.Unlock()
 
-		subscription <- &msg
+		if subscription != nil {
+			subscription <- &msg
+		}
 	}
 
 }

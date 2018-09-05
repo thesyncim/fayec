@@ -23,7 +23,7 @@ type Transport interface {
 	Publish(subscription string, message *message.Message) error
 }
 
-type Event string
+type Event = string
 
 const (
 	Subscribe   Event = "/meta/subscribe"
@@ -32,6 +32,17 @@ const (
 	Handshake   Event = "/meta/handshake"
 	Disconnect  Event = "/meta/disconnect"
 )
+
+var ControlEvents = []Event{Subscribe, Connect, Unsubscribe, Handshake, Disconnect}
+
+func IsControlMsg(channel string) bool {
+	for i := range ControlEvents {
+		if channel == ControlEvents[i] {
+			return true
+		}
+	}
+	return false
+}
 
 var registeredTransports = map[string]Transport{}
 
