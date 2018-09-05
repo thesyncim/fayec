@@ -41,11 +41,19 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 		InExt:  c.opts.inExt,
 		OutExt: c.opts.outExt,
 	}
-
-	err := c.opts.transport.Init(tops)
-	if err != nil {
+	var err error
+	if err = c.opts.transport.Init(tops); err != nil {
 		return nil, err
 	}
+
+	if err = c.opts.transport.Handshake(); err != nil {
+		return nil, err
+	}
+
+	if err = c.opts.transport.Connect(); err != nil {
+		return nil, err
+	}
+
 	return &c, nil
 }
 
@@ -60,6 +68,7 @@ func WithInExtension(extension message.Extension) Option {
 		o.inExt = extension
 	}
 }
+
 func WithTransport(t transport.Transport) Option {
 	return func(o *options) {
 		o.transport = t
