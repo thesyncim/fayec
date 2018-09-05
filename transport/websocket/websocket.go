@@ -30,6 +30,7 @@ type Websocket struct {
 	conn          *websocket.Conn
 	clientID      string
 	msgID         *uint64
+	once          sync.Once
 
 	subsMu sync.Mutex //todo sync.Map
 	subs   map[string]chan *message.Message
@@ -130,6 +131,8 @@ func (w *Websocket) Connect() error {
 		Id:             w.nextMsgID(),
 	}
 	//todo verify if extensions are applied on connect,verify if hs is complete
+
+	go w.readWorker()
 	return w.sendMessage(&m)
 }
 
