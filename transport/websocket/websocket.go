@@ -1,9 +1,11 @@
 package websocket
 
 import (
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/thesyncim/faye/message"
 	"github.com/thesyncim/faye/transport"
+	"log"
 	"strconv"
 	"sync/atomic"
 )
@@ -12,6 +14,13 @@ const transportName = "websocket"
 
 func init() {
 	transport.RegisterTransport(&Websocket{})
+}
+
+var Debug = true
+
+func debugJson(v interface{}) string {
+	b, _ := json.MarshalIndent(v, "", " ")
+	return string(b)
 }
 
 type Websocket struct {
@@ -50,17 +59,24 @@ func (w *Websocket) Options() *transport.Options {
 }
 func (w *Websocket) Handshake() (err error) {
 	var payload []message.Message
-	if err = w.conn.WriteJSON(append(payload, message.Message{
+	payload = append(payload, message.Message{
 		Channel:                  string(transport.Handshake),
 		Version:                  "1.0", //todo const
 		SupportedConnectionTypes: []string{transportName},
-	})); err != nil {
+	})
+	if Debug {
+		log.Println("handshake request", debugJson(payload))
+	}
+	if err = w.conn.WriteJSON(payload); err != nil {
 		return err
 	}
 
 	var hsResps []message.Message
 	if err = w.conn.ReadJSON(&hsResps); err != nil {
 		return err
+	}
+	if Debug {
+		log.Println("handshake response", debugJson(hsResps))
 	}
 
 	resp := hsResps[0]
@@ -73,20 +89,24 @@ func (w *Websocket) Handshake() (err error) {
 
 func (w *Websocket) Connect() error {
 	var payload []message.Message
-	//todo verify if extensions are applied on connect,verify if hs is complete
-	return w.conn.WriteJSON(append(payload, message.Message{
+	payload = append(payload, message.Message{
 		Channel:        string(transport.Connect),
 		ClientId:       w.clientID,
 		ConnectionType: transportName,
 		Id:             w.nextMsgID(),
-	}))
+	})
+	if Debug {
+		log.Println("connect request", debugJson(payload))
+	}
+	//todo verify if extensions are applied on connect,verify if hs is complete
+	return w.conn.WriteJSON(payload)
 }
 
 func (w *Websocket) Subscribe(subscription string, onMessage func(message *message.Message)) error {
 	m := &message.Message{
 		Channel:      string(transport.Subscribe),
 		ClientId:     w.clientID,
-		Subscription: "/" + subscription,
+		Subscription: subscription,
 		Id:           w.nextMsgID(),
 	}
 	if w.TransportOpts.OutExt != nil {
@@ -94,7 +114,11 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 	}
 
 	var payload []message.Message
-	err := w.conn.WriteJSON(append(payload, *m))
+	payload = append(payload, *m)
+	if Debug {
+		log.Println("subscribe request", debugJson(payload))
+	}
+	err := w.conn.WriteJSON(payload)
 	if err != nil {
 		return err
 	}
@@ -102,6 +126,9 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 	var hsResps []message.Message
 	if err = w.conn.ReadJSON(&hsResps); err != nil {
 		return err
+	}
+	if Debug {
+		log.Println("subscribe response", debugJson(hsResps))
 	}
 
 	subResp := hsResps[0]
