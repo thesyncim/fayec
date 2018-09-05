@@ -49,7 +49,8 @@ func (w *Websocket) Options() *transport.Options {
 	return w.TransportOpts
 }
 func (w *Websocket) Handshake() (err error) {
-	if err = w.conn.WriteJSON(append([]message.Message{}, message.Message{
+	var payload []message.Message
+	if err = w.conn.WriteJSON(append(payload, message.Message{
 		Channel:                  string(transport.Handshake),
 		Version:                  "1.0", //todo const
 		SupportedConnectionTypes: []string{transportName},
@@ -71,8 +72,9 @@ func (w *Websocket) Handshake() (err error) {
 }
 
 func (w *Websocket) Connect() error {
+	var payload []message.Message
 	//todo verify if extensions are applied on connect,verify if hs is complete
-	return w.conn.WriteJSON(append([]message.Message{}, message.Message{
+	return w.conn.WriteJSON(append(payload, message.Message{
 		Channel:        string(transport.Connect),
 		ClientId:       w.clientID,
 		ConnectionType: transportName,
@@ -90,7 +92,9 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 	if w.TransportOpts.OutExt != nil {
 		w.TransportOpts.OutExt(m)
 	}
-	err := w.conn.WriteJSON(append([]message.Message{}, *m))
+
+	var payload []message.Message
+	err := w.conn.WriteJSON(append(payload, *m))
 	if err != nil {
 		return err
 	}
@@ -108,7 +112,7 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 		//report err just for sanity
 	}
 	unsubsCh := make(chan struct{}, 0)
-	//todo multiple subs
+
 	w.subs[subscription] = unsubsCh
 
 	for {
@@ -118,13 +122,13 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 		default:
 		}
 		//todo guard unsusribe
-		var hsResps []message.Message
-		err := w.conn.ReadJSON(&hsResps)
+		var payload []message.Message
+		err := w.conn.ReadJSON(&payload)
 		if err != nil {
 			return err
 		}
 
-		msg := hsResps[0]
+		msg := payload[0]
 		onMessage(&msg)
 	}
 	return nil
