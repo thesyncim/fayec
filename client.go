@@ -1,4 +1,4 @@
-package faye
+package fayec
 
 import (
 	"github.com/thesyncim/faye/message"
