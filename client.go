@@ -49,10 +49,27 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 	return &c, nil
 }
 
+func WithOutExtension(extension message.Extension) Option {
+	return func(o *options) {
+		o.outExt = extension
+	}
+}
+
+func WithInExtension(extension message.Extension) Option {
+	return func(o *options) {
+		o.inExt = extension
+	}
+}
+func WithTransport(t transport.Transport) Option {
+	return func(o *options) {
+		o.transport = t
+	}
+}
+
 func (c *Client) Subscribe(subscription string, onMsg func(message *message.Message)) error {
-	panic("not implemented")
+	return c.opts.transport.Subscribe(subscription, onMsg)
 }
 
 func (c *Client) Publish(subscription string, message *message.Message) error {
-	panic("not implemented")
+	return c.opts.transport.Publish(subscription, message)
 }
