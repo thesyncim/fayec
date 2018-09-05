@@ -7,6 +7,7 @@ import (
 	"github.com/thesyncim/faye/transport"
 	"log"
 	"strconv"
+	"strings"
 	"sync/atomic"
 )
 
@@ -154,8 +155,11 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 		if err != nil {
 			return err
 		}
-
+		//hack
 		msg := payload[0]
+		if strings.HasPrefix(msg.Channel, "/meta") {
+			continue //todo update introspect message and update state
+		}
 		onMessage(&msg)
 	}
 	return nil
