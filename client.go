@@ -80,8 +80,8 @@ func (c *Client) Publish(subscription string, data message.Data) (id string, err
 	return c.opts.transport.Publish(subscription, data)
 }
 
-//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
-//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
+//OnPublishResponse sets the handler to be triggered if the server replies to the publish request.
+//According to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
 //ever be triggered.
 //can be used to identify the status of the published request and for example retry failed published requests.
 func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
