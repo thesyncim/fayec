@@ -19,7 +19,7 @@ func NewGetStream(apiKey string, signature string) GetStream {
 }
 
 func (gt GetStream) OutExtension(message *message.Message) {
-	if message.Channel == string(transport.Subscribe) {
+	if message.Channel == string(transport.MetaSubscribe) {
 		//get useriID
 		gt.UserID = message.Subscription[1:]
 		message.Ext = gt

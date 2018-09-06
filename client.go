@@ -18,8 +18,10 @@ var defaultOpts = options{
 
 //https://faye.jcoglan.com/architecture.html
 type client interface {
-	Subscribe(subscription string, onMsg func(data message.Data)) error
-	Publish(subscription string, data message.Data) error
+	Disconnect() error
+	Subscribe(subscription string, onMessage func(message message.Data)) error
+	Unsubscribe(subscription string) error
+	Publish(subscription string, message message.Data) error
 	//todo unsubscribe,etc
 }
 
@@ -58,11 +60,28 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 	return &c, nil
 }
 
+func (c *Client) Subscribe(subscription string, onMsg func(message message.Data)) error {
+	return c.opts.transport.Subscribe(subscription, onMsg)
+}
+
+func (c *Client) Unsubscribe(subscription string) error {
+	return c.opts.transport.Unsubscribe(subscription)
+}
+
+func (c *Client) Publish(subscription string, data message.Data) error {
+	return c.opts.transport.Publish(subscription, data)
+}
+
+func (c *Client) Disconnect() error {
+	return c.opts.transport.Disconnect()
+}
+
 func WithOutExtension(extension message.Extension) Option {
 	return func(o *options) {
 		o.outExt = append(o.outExt, extension)
 	}
 }
+
 func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 	return func(o *options) {
 		o.inExt = append(o.inExt, inExt)
@@ -80,12 +99,4 @@ func WithTransport(t transport.Transport) Option {
 	return func(o *options) {
 		o.transport = t
 	}
-}
-
-func (c *Client) Subscribe(subscription string, onMsg func(message message.Data)) error {
-	return c.opts.transport.Subscribe(subscription, onMsg)
-}
-
-func (c *Client) Publish(subscription string, data message.Data) error {
-	return c.opts.transport.Publish(subscription, data)
 }

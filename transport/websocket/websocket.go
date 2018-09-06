@@ -25,6 +25,8 @@ type Websocket struct {
 	once          sync.Once
 	advice        atomic.Value //type message.Advise
 
+	stopCh chan struct{}
+
 	subsMu sync.Mutex //todo sync.Map
 	subs   map[string]chan *message.Message
 }
@@ -39,6 +41,7 @@ func (w *Websocket) Init(options *transport.Options) error {
 	w.TransportOpts = options
 	w.msgID = &msgID
 	w.subs = map[string]chan *message.Message{}
+	w.stopCh = make(chan struct{})
 	w.conn, _, err = websocket.DefaultDialer.Dial(options.Url, nil)
 	if err != nil {
 		return err
@@ -48,6 +51,11 @@ func (w *Websocket) Init(options *transport.Options) error {
 
 func (w *Websocket) readWorker() error {
 	for {
+		select {
+		case <-w.stopCh:
+			return nil
+		default:
+		}
 		var payload []message.Message
 		err := w.conn.ReadJSON(&payload)
 		if err != nil {
@@ -60,11 +68,11 @@ func (w *Websocket) readWorker() error {
 			w.handleAdvise(msg.Advice)
 		}
 
-		if transport.IsControlMsg(msg.Channel) {
+		if transport.IsMetaEvent(msg.Channel) {
 			//handle it
 			switch msg.Channel {
-			case transport.Subscribe:
-				//handle Subscribe resp
+			case transport.MetaSubscribe:
+				//handle MetaSubscribe resp
 				if !msg.Successful {
 					w.subsMu.Lock()
 					subscription, ok := w.subs[msg.Subscription]
@@ -82,16 +90,16 @@ func (w *Websocket) readWorker() error {
 					delete(w.subs, msg.Channel)
 					w.subsMu.Unlock()
 				}
-			case transport.Unsubscribe:
-				//handle Unsubscribe resp
-			case transport.Connect:
-				//handle Connect resp
+			case transport.MetaUnsubscribe:
+				//handle MetaUnsubscribe resp
+			case transport.MetaConnect:
+				//handle MetaConnect resp
 
-			case transport.Disconnect:
-				//handle Disconnect resp
+			case transport.MetaDisconnect:
+				//handle MetaDisconnect resp
 
-			case transport.Handshake:
-				//handle Handshake resp
+			case transport.MetaHandshake:
+				//handle MetaHandshake resp
 			}
 
 			continue
@@ -130,7 +138,7 @@ func (w *Websocket) Options() *transport.Options {
 
 func (w *Websocket) Handshake() (err error) {
 	m := message.Message{
-		Channel:                  transport.Handshake,
+		Channel:                  transport.MetaHandshake,
 		Version:                  "1.0", //todo const
 		SupportedConnectionTypes: []string{transportName},
 	}
@@ -155,7 +163,7 @@ func (w *Websocket) Handshake() (err error) {
 
 func (w *Websocket) Connect() error {
 	m := message.Message{
-		Channel:        transport.Connect,
+		Channel:        transport.MetaConnect,
 		ClientId:       w.clientID,
 		ConnectionType: transportName,
 		Id:             w.nextMsgID(),
@@ -165,9 +173,22 @@ func (w *Websocket) Connect() error {
 	return w.sendMessage(&m)
 }
 
+func (w *Websocket) Disconnect() error {
+	m := message.Message{
+		Channel:  transport.MetaDisconnect,
+		ClientId: w.clientID,
+		Id:       w.nextMsgID(),
+	}
+
+	w.stopCh <- struct{}{}
+	close(w.stopCh)
+
+	return w.sendMessage(&m)
+}
+
 func (w *Websocket) Subscribe(subscription string, onMessage func(data message.Data)) error {
 	m := &message.Message{
-		Channel:      transport.Subscribe,
+		Channel:      transport.MetaSubscribe,
 		ClientId:     w.clientID,
 		Subscription: subscription,
 		Id:           w.nextMsgID(),
@@ -197,7 +218,7 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(data message.D
 func (w *Websocket) Unsubscribe(subscription string) error {
 	//https://docs.cometd.org/current/reference/#_bayeux_meta_unsubscribe
 	m := &message.Message{
-		Channel:      transport.Unsubscribe,
+		Channel:      transport.MetaUnsubscribe,
 		Subscription: subscription,
 		ClientId:     w.clientID,
 		Id:           w.nextMsgID(),
