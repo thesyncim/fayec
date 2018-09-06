@@ -25,14 +25,17 @@ type client interface {
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
 
+//Option set the Client options, such as Transport, message extensions,etc.
 type Option func(*options)
 
 var _ client = (*Client)(nil)
 
+// Client represents a client connection to an faye server.
 type Client struct {
 	opts options
 }
 
+//NewClient creates a new faye client with the provided options and connect to the specified url.
 func NewClient(url string, opts ...Option) (*Client, error) {
 	var c Client
 	c.opts = defaultOpts
@@ -60,36 +63,47 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 	return &c, nil
 }
 
+//Subscribe informs the server that messages published to that channel are delivered to itself.
 func (c *Client) Subscribe(subscription string, onMsg func(message message.Data)) error {
 	return c.opts.transport.Subscribe(subscription, onMsg)
 }
 
+//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
+//the specified channel/subscription
 func (c *Client) Unsubscribe(subscription string) error {
 	return c.opts.transport.Unsubscribe(subscription)
 }
 
+//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
+//if this feature is supported by the server use the OnPublishResponse to get the publish status.
 func (c *Client) Publish(subscription string, data message.Data) (id string, err error) {
 	return c.opts.transport.Publish(subscription, data)
 }
 
 //OnPublishResponse sets the handler to be triggered if the server replies to the publish request
 //according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
-//ever be triggered
-//can be used to identify the status of the published request and for example retry failed published requests
+//ever be triggered.
+//can be used to identify the status of the published request and for example retry failed published requests.
 func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
 	c.opts.transport.OnPublishResponse(subscription, onMsg)
 }
 
+//Disconnect closes all subscriptions and inform the server to remove any client-related state.
+//any subsequent method call to the client object will result in undefined behaviour.
 func (c *Client) Disconnect() error {
 	return c.opts.transport.Disconnect()
 }
 
+//WithOutExtension append the provided outgoing extension to the list of outgoing extensions.
+//extensions run in the order that they are provided
 func WithOutExtension(extension message.Extension) Option {
 	return func(o *options) {
 		o.outExt = append(o.outExt, extension)
 	}
 }
 
+//WithExtension append the provided incoming extension and outgoing to the list of incoming and outgoing extensions.
+//extensions run in the order that they are provided
 func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 	return func(o *options) {
 		o.inExt = append(o.inExt, inExt)
@@ -97,12 +111,15 @@ func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 	}
 }
 
+//WithInExtension append the provided incoming extension to the list of incoming extensions.
+//extensions run in the order that they are provided
 func WithInExtension(extension message.Extension) Option {
 	return func(o *options) {
 		o.inExt = append(o.inExt, extension)
 	}
 }
 
+//WithTransport sets the client transport to be used to communicate with server.
 func WithTransport(t transport.Transport) Option {
 	return func(o *options) {
 		o.transport = t
