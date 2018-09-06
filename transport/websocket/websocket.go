@@ -17,6 +17,7 @@ func init() {
 	transport.RegisterTransport(&Websocket{})
 }
 
+//Websocket represents an websocket transport for the faye protocol
 type Websocket struct {
 	TransportOpts *transport.Options
 	conn          *websocket.Conn
@@ -36,6 +37,7 @@ type Websocket struct {
 
 var _ transport.Transport = (*Websocket)(nil)
 
+//Init initializes the transport with the provided options
 func (w *Websocket) Init(options *transport.Options) error {
 	var (
 		err   error
@@ -137,6 +139,7 @@ func (w *Websocket) readWorker() error {
 	}
 }
 
+//Name returns the transport name (websocket)
 func (w *Websocket) Name() string {
 	return transportName
 }
@@ -152,10 +155,12 @@ func (w *Websocket) nextMsgID() string {
 	return strconv.Itoa(int(atomic.AddUint64(w.msgID, 1)))
 }
 
+//Options return the transport Options
 func (w *Websocket) Options() *transport.Options {
 	return w.TransportOpts
 }
 
+//Handshake initiates a connection negotiation by sending a message to the /meta/handshake channel.
 func (w *Websocket) Handshake() (err error) {
 	m := message.Message{
 		Channel:                  transport.MetaHandshake,
@@ -181,6 +186,8 @@ func (w *Websocket) Handshake() (err error) {
 	return nil
 }
 
+//Connect is called  after a client has discovered the server’s capabilities with a handshake exchange,
+//a connection is established by sending a message to the /meta/connect channel
 func (w *Websocket) Connect() error {
 	m := message.Message{
 		Channel:        transport.MetaConnect,
@@ -193,6 +200,8 @@ func (w *Websocket) Connect() error {
 	return w.sendMessage(&m)
 }
 
+//Disconnect closes all subscriptions and inform the server to remove any client-related state.
+//any subsequent method call to the client object will result in undefined behaviour.
 func (w *Websocket) Disconnect() error {
 	m := message.Message{
 		Channel:  transport.MetaDisconnect,
@@ -212,6 +221,7 @@ func (w *Websocket) Disconnect() error {
 	return w.sendMessage(&m)
 }
 
+//Subscribe informs the server that messages published to that channel are delivered to itself.
 func (w *Websocket) Subscribe(subscription string, onMessage func(data message.Data)) error {
 	m := &message.Message{
 		Channel:      transport.MetaSubscribe,
@@ -243,6 +253,8 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(data message.D
 	return nil
 }
 
+//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
+//the specified channel/subscription
 func (w *Websocket) Unsubscribe(subscription string) error {
 	//https://docs.cometd.org/current/reference/#_bayeux_meta_unsubscribe
 	m := &message.Message{
@@ -262,6 +274,8 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 	return w.sendMessage(m)
 }
 
+//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
+//if this feature is supported by the server use the OnPublishResponse to get the publish status.
 func (w *Websocket) Publish(subscription string, data message.Data) (id string, err error) {
 	id = w.nextMsgID()
 	m := &message.Message{
@@ -276,6 +290,10 @@ func (w *Websocket) Publish(subscription string, data message.Data) (id string, 
 	return id, nil
 }
 
+//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
+//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
+//ever be triggered
+//can be used to identify the status of the published request and for example retry failed published requests
 func (w *Websocket) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
 	w.onPubResponseMu.Lock()
 	w.onPublishResponse[subscription] = onMsg

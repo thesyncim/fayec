@@ -12,6 +12,7 @@ func debugJson(v interface{}) string {
 	return string(b)
 }
 
+//
 type DebugExtension struct {
 	in  *log.Logger
 	out *log.Logger

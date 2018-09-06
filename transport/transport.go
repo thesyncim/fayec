@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// handshake, connect, disconnect, subscribe, unsubscribe and publish
-
+//Options represents the connection options to be used by a transport
 type Options struct {
 	Url           string
 	RetryInterval time.Duration
@@ -17,15 +16,29 @@ type Options struct {
 	//todo read/write deadline
 }
 
+//Transport represents the transport to be used to comunicate with the faye server
 type Transport interface {
+	//Name returns the transport name
 	Name() string
+	//Init initializes the transport with the provided options
 	Init(options *Options) error
+	//Options return the transport Options
 	Options() *Options
+	//Handshake initiates a connection negotiation by sending a message to the /meta/handshake channel.
 	Handshake() error
+	//Connect is called  after a client has discovered the server’s capabilities with a handshake exchange,
+	//a connection is established by sending a message to the /meta/connect channel
 	Connect() error
+	//Disconnect closes all subscriptions and inform the server to remove any client-related state.
+	//any subsequent method call to the client object will result in undefined behaviour.
 	Disconnect() error
+	//Subscribe informs the server that messages published to that channel are delivered to itself.
 	Subscribe(subscription string, onMessage func(message message.Data)) error
+	//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
+	//the specified channel/subscription
 	Unsubscribe(subscription string) error
+	//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
+	//if this feature is supported by the server use the OnPublishResponse to get the publish status.
 	Publish(subscription string, message message.Data) (id string, err error)
 	//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
 	//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
@@ -34,6 +47,7 @@ type Transport interface {
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
 
+//MetaMessage are channels commencing with the /meta/ segment ans, are the channels used by the faye protocol itself.
 type MetaMessage = string
 
 const (
@@ -44,9 +58,12 @@ const (
 	MetaHandshake   MetaMessage = "/meta/handshake"
 )
 
+//EventMessage are published in event messages sent from a faye client to a faye server
+//and are delivered in event messages sent from a faye server to a faye client.
 type EventMessage = int
 
 const (
+	//
 	EventPublish EventMessage = iota
 	EventDelivery
 )
