@@ -23,6 +23,7 @@ type Websocket struct {
 	clientID      string
 	msgID         *uint64
 	once          sync.Once
+	advice        atomic.Value //type message.Advise
 
 	subsMu sync.Mutex //todo sync.Map
 	subs   map[string]chan *message.Message
@@ -54,6 +55,10 @@ func (w *Websocket) readWorker() error {
 		}
 		//dispatch
 		msg := &payload[0]
+
+		if msg.Advice != nil {
+			w.handleAdvise(msg.Advice)
+		}
 
 		if transport.IsControlMsg(msg.Channel) {
 			//handle it
@@ -201,7 +206,13 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 }
 
 func (w *Websocket) Publish(subscription string, data message.Data) error {
-	panic("not implemented")
+	m := &message.Message{
+		Channel:  subscription,
+		Data:     data,
+		ClientId: w.clientID,
+		Id:       w.nextMsgID(),
+	}
+	return w.sendMessage(m)
 }
 
 func (w *Websocket) applyOutExtensions(m *message.Message) {
@@ -209,8 +220,14 @@ func (w *Websocket) applyOutExtensions(m *message.Message) {
 		w.TransportOpts.OutExt[i](m)
 	}
 }
+
 func (w *Websocket) applyInExtensions(m *message.Message) {
 	for i := range w.TransportOpts.InExt {
 		w.TransportOpts.InExt[i](m)
 	}
+}
+
+func (w *Websocket) handleAdvise(m *message.Advise) {
+	//todo actually handle the advice
+	w.advice.Store(m)
 }

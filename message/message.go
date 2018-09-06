@@ -16,7 +16,7 @@ type Message struct {
 	Ext                      interface{} `json:"ext,omitempty"`
 	Id                       string      `json:"id,omitempty"`
 	ClientId                 string      `json:"clientId,omitempty"`
-	Advice                   Advise      `json:"advice,omitempty"`
+	Advice                   *Advise     `json:"advice,omitempty"`
 	Data                     Data        `json:"data,omitempty"`
 	Timestamp                uint64      `json:"timestamp,omitempty"`
 	AuthSuccessful           bool        `json:"authSuccessful,omitempty"`
