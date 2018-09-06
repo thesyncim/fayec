@@ -25,10 +25,13 @@ type Websocket struct {
 	once          sync.Once
 	advice        atomic.Value //type message.Advise
 
-	stopCh chan struct{}
+	stopCh chan error
 
 	subsMu sync.Mutex //todo sync.Map
 	subs   map[string]chan *message.Message
+
+	onPubResponseMu   sync.Mutex //todo sync.Map
+	onPublishResponse map[string]func(message *message.Message)
 }
 
 var _ transport.Transport = (*Websocket)(nil)
@@ -41,7 +44,7 @@ func (w *Websocket) Init(options *transport.Options) error {
 	w.TransportOpts = options
 	w.msgID = &msgID
 	w.subs = map[string]chan *message.Message{}
-	w.stopCh = make(chan struct{})
+	w.stopCh = make(chan error)
 	w.conn, _, err = websocket.DefaultDialer.Dial(options.Url, nil)
 	if err != nil {
 		return err
@@ -52,8 +55,8 @@ func (w *Websocket) Init(options *transport.Options) error {
 func (w *Websocket) readWorker() error {
 	for {
 		select {
-		case <-w.stopCh:
-			return nil
+		case err := <-w.stopCh:
+			return err
 		default:
 		}
 		var payload []message.Message
@@ -68,7 +71,7 @@ func (w *Websocket) readWorker() error {
 			w.handleAdvise(msg.Advice)
 		}
 
-		if transport.IsMetaEvent(msg.Channel) {
+		if transport.IsMetaMessage(msg) {
 			//handle it
 			switch msg.Channel {
 			case transport.MetaSubscribe:
@@ -104,16 +107,33 @@ func (w *Websocket) readWorker() error {
 
 			continue
 		}
+		//is Event Message
+		//there are 2 types of Event Message
+		// 1. Publish
+		// 2. Delivery
 
-		w.subsMu.Lock()
-		subscription := w.subs[msg.Channel]
-		w.subsMu.Unlock()
+		if transport.IsEventDelivery(msg) {
+			w.subsMu.Lock()
+			subscription := w.subs[msg.Channel]
+			w.subsMu.Unlock()
 
-		w.applyInExtensions(msg)
+			w.applyInExtensions(msg)
 
-		if subscription != nil {
-			subscription <- msg
+			if subscription != nil {
+				subscription <- msg
+			}
+			continue
 		}
+
+		if transport.IsEventPublish(msg) {
+			w.onPubResponseMu.Lock()
+			onPublish, ok := w.onPublishResponse[msg.Channel]
+			w.onPubResponseMu.Unlock()
+			if ok {
+				onPublish(msg)
+			}
+		}
+
 	}
 }
 
@@ -180,7 +200,7 @@ func (w *Websocket) Disconnect() error {
 		Id:       w.nextMsgID(),
 	}
 
-	w.stopCh <- struct{}{}
+	w.stopCh <- nil
 	close(w.stopCh)
 
 	return w.sendMessage(&m)
@@ -212,6 +232,8 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(data message.D
 		}
 		onMessage(inMsg.Data)
 	}
+	//we we got were means that the subscription was closed
+	// return nil for now
 	return nil
 }
 
@@ -226,14 +248,24 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 	return w.sendMessage(m)
 }
 
-func (w *Websocket) Publish(subscription string, data message.Data) error {
+func (w *Websocket) Publish(subscription string, data message.Data) (id string, err error) {
+	id = w.nextMsgID()
 	m := &message.Message{
 		Channel:  subscription,
 		Data:     data,
 		ClientId: w.clientID,
-		Id:       w.nextMsgID(),
+		Id:       id,
 	}
-	return w.sendMessage(m)
+	if err = w.sendMessage(m); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (w *Websocket) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
+	w.onPubResponseMu.Lock()
+	w.onPublishResponse[subscription] = onMsg
+	w.onPubResponseMu.Unlock()
 }
 
 func (w *Websocket) applyOutExtensions(m *message.Message) {

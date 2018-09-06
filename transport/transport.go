@@ -26,17 +26,29 @@ type Transport interface {
 	Disconnect() error
 	Subscribe(subscription string, onMessage func(message message.Data)) error
 	Unsubscribe(subscription string) error
-	Publish(subscription string, message message.Data) error
+	Publish(subscription string, message message.Data) (id string, err error)
+	//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
+	//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
+	//ever be triggered
+	//can be used to identify the status of the published request and for example retry failed published requests
+	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
 
-type Meta = string
+type MetaMessage = string
 
 const (
-	MetaSubscribe   Meta = "/meta/subscribe"
-	MetaConnect     Meta = "/meta/connect"
-	MetaDisconnect  Meta = "/meta/disconnect"
-	MetaUnsubscribe Meta = "/meta/unsubscribe"
-	MetaHandshake   Meta = "/meta/handshake"
+	MetaSubscribe   MetaMessage = "/meta/subscribe"
+	MetaConnect     MetaMessage = "/meta/connect"
+	MetaDisconnect  MetaMessage = "/meta/disconnect"
+	MetaUnsubscribe MetaMessage = "/meta/unsubscribe"
+	MetaHandshake   MetaMessage = "/meta/handshake"
+)
+
+type EventMessage = int
+
+const (
+	EventPublish EventMessage = iota
+	EventDelivery
 )
 
 type Reconnect = string
@@ -56,15 +68,26 @@ const (
 	ReconnectNone Reconnect = "none"
 )
 
-var MetaEvents = []Meta{MetaSubscribe, MetaConnect, MetaUnsubscribe, MetaHandshake, MetaDisconnect}
+var metaMessages = []MetaMessage{MetaSubscribe, MetaConnect, MetaUnsubscribe, MetaHandshake, MetaDisconnect}
 
-func IsMetaEvent(channel string) bool {
-	for i := range MetaEvents {
-		if channel == MetaEvents[i] {
+func IsMetaMessage(msg *message.Message) bool {
+	for i := range metaMessages {
+		if msg.Channel == metaMessages[i] {
 			return true
 		}
 	}
 	return false
+}
+
+func IsEventDelivery(msg *message.Message) bool {
+	if msg.Data != nil {
+		return true
+	}
+	return false
+}
+
+func IsEventPublish(msg *message.Message) bool {
+	return !IsEventDelivery(msg)
 }
 
 var registeredTransports = map[string]Transport{}

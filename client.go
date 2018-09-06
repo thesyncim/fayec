@@ -21,8 +21,8 @@ type client interface {
 	Disconnect() error
 	Subscribe(subscription string, onMessage func(message message.Data)) error
 	Unsubscribe(subscription string) error
-	Publish(subscription string, message message.Data) error
-	//todo unsubscribe,etc
+	Publish(subscription string, message message.Data) (string, error)
+	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
 
 type Option func(*options)
@@ -68,8 +68,16 @@ func (c *Client) Unsubscribe(subscription string) error {
 	return c.opts.transport.Unsubscribe(subscription)
 }
 
-func (c *Client) Publish(subscription string, data message.Data) error {
+func (c *Client) Publish(subscription string, data message.Data) (id string, err error) {
 	return c.opts.transport.Publish(subscription, data)
+}
+
+//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
+//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
+//ever be triggered
+//can be used to identify the status of the published request and for example retry failed published requests
+func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
+	c.opts.transport.OnPublishResponse(subscription, onMsg)
 }
 
 func (c *Client) Disconnect() error {
