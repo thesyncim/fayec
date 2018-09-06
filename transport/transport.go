@@ -6,8 +6,8 @@ import "github.com/thesyncim/faye/message"
 
 type Options struct {
 	Url    string
-	InExt  message.Extension
-	OutExt message.Extension
+	InExt  []message.Extension
+	OutExt []message.Extension
 	//todo dial timeout
 	//todo read/write deadline
 }

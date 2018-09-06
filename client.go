@@ -7,8 +7,8 @@ import (
 )
 
 type options struct {
-	inExt     message.Extension
-	outExt    message.Extension
+	inExt     []message.Extension
+	outExt    []message.Extension
 	transport transport.Transport
 }
 
@@ -60,13 +60,19 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 
 func WithOutExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.outExt = extension
+		o.outExt = append(o.outExt, extension)
+	}
+}
+func WithExtension(inExt message.Extension, outExt message.Extension) Option {
+	return func(o *options) {
+		o.inExt = append(o.inExt, inExt)
+		o.outExt = append(o.outExt, outExt)
 	}
 }
 
 func WithInExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.inExt = extension
+		o.inExt = append(o.inExt, extension)
 	}
 }
 

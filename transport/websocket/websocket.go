@@ -1,11 +1,11 @@
 package websocket
 
 import (
-	"encoding/json"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/thesyncim/faye/message"
 	"github.com/thesyncim/faye/transport"
-	"log"
+
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -15,13 +15,6 @@ const transportName = "websocket"
 
 func init() {
 	transport.RegisterTransport(&Websocket{})
-}
-
-var Debug = true
-
-func debugJson(v interface{}) string {
-	b, _ := json.MarshalIndent(v, "", " ")
-	return string(b)
 }
 
 type Websocket struct {
@@ -60,7 +53,7 @@ func (w *Websocket) readWorker() error {
 			return err
 		}
 		//dispatch
-		msg := payload[0]
+		msg := &payload[0]
 
 		if transport.IsControlMsg(msg.Channel) {
 			//handle it
@@ -71,11 +64,14 @@ func (w *Websocket) readWorker() error {
 					w.subsMu.Lock()
 					subscription, ok := w.subs[msg.Subscription]
 					w.subsMu.Unlock()
-					log.Println(debugJson(msg))
 					if !ok {
 						panic("BUG: subscription not registered `" + msg.Subscription + "`")
 					}
-					subscription <- &msg
+					if msg.GetError() != nil {
+						//inject the error
+						msg.Error = fmt.Sprintf("susbscription `%s` failed", msg.Subscription)
+					}
+					subscription <- msg
 					close(subscription)
 					w.subsMu.Lock()
 					delete(w.subs, msg.Channel)
@@ -100,8 +96,10 @@ func (w *Websocket) readWorker() error {
 		subscription := w.subs[msg.Channel]
 		w.subsMu.Unlock()
 
+		w.applyInExtensions(msg)
+
 		if subscription != nil {
-			subscription <- &msg
+			subscription <- msg
 		}
 	}
 }
@@ -111,11 +109,10 @@ func (w *Websocket) Name() string {
 }
 
 func (w *Websocket) sendMessage(m *message.Message) error {
+	w.applyOutExtensions(m)
+
 	var payload []message.Message
 	payload = append(payload, *m)
-	if Debug {
-		log.Println("sending request", debugJson(payload))
-	}
 	return w.conn.WriteJSON(payload)
 }
 func (w *Websocket) nextMsgID() string {
@@ -141,11 +138,9 @@ func (w *Websocket) Handshake() (err error) {
 	if err = w.conn.ReadJSON(&hsResps); err != nil {
 		return err
 	}
-	if Debug {
-		log.Println("handshake response", debugJson(hsResps))
-	}
 
-	resp := hsResps[0]
+	resp := &hsResps[0]
+	w.applyInExtensions(resp)
 	if resp.GetError() != nil {
 		return err
 	}
@@ -160,7 +155,7 @@ func (w *Websocket) Connect() error {
 		ConnectionType: transportName,
 		Id:             w.nextMsgID(),
 	}
-	//todo verify if extensions are applied on connect,verify if hs is complete
+	//todo expect connect resp from server
 	go w.readWorker()
 	return w.sendMessage(&m)
 }
@@ -171,9 +166,6 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 		ClientId:     w.clientID,
 		Subscription: subscription,
 		Id:           w.nextMsgID(),
-	}
-	if w.TransportOpts.OutExt != nil {
-		w.TransportOpts.OutExt(m)
 	}
 
 	if err := w.sendMessage(m); err != nil {
@@ -198,9 +190,27 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 }
 
 func (w *Websocket) Unsubscribe(subscription string) error {
-	panic("not implemented")
+	//https://docs.cometd.org/current/reference/#_bayeux_meta_unsubscribe
+	m := &message.Message{
+		Channel:      transport.Unsubscribe,
+		Subscription: subscription,
+		ClientId:     w.clientID,
+		Id:           w.nextMsgID(),
+	}
+	return w.sendMessage(m)
 }
 
 func (w *Websocket) Publish(subscription string, message *message.Message) error {
 	panic("not implemented")
+}
+
+func (w *Websocket) applyOutExtensions(m *message.Message) {
+	for i := range w.TransportOpts.OutExt {
+		w.TransportOpts.OutExt[i](m)
+	}
+}
+func (w *Websocket) applyInExtensions(m *message.Message) {
+	for i := range w.TransportOpts.InExt {
+		w.TransportOpts.InExt[i](m)
+	}
 }
