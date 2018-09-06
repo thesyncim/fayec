@@ -160,7 +160,7 @@ func (w *Websocket) Connect() error {
 	return w.sendMessage(&m)
 }
 
-func (w *Websocket) Subscribe(subscription string, onMessage func(message *message.Message)) error {
+func (w *Websocket) Subscribe(subscription string, onMessage func(data message.Data)) error {
 	m := &message.Message{
 		Channel:      transport.Subscribe,
 		ClientId:     w.clientID,
@@ -184,7 +184,7 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(message *messa
 		if inMsg.GetError() != nil {
 			return inMsg.GetError()
 		}
-		onMessage(inMsg)
+		onMessage(inMsg.Data)
 	}
 	return nil
 }
@@ -200,7 +200,7 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 	return w.sendMessage(m)
 }
 
-func (w *Websocket) Publish(subscription string, message *message.Message) error {
+func (w *Websocket) Publish(subscription string, data message.Data) error {
 	panic("not implemented")
 }
 

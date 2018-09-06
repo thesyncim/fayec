@@ -18,9 +18,9 @@ type Transport interface {
 	Options() *Options
 	Handshake() error
 	Connect() error
-	Subscribe(subscription string, onMessage func(message *message.Message)) error
+	Subscribe(subscription string, onMessage func(message message.Data)) error
 	Unsubscribe(subscription string) error
-	Publish(subscription string, message *message.Message) error
+	Publish(subscription string, message message.Data) error
 }
 
 type Event = string

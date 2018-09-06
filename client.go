@@ -18,8 +18,8 @@ var defaultOpts = options{
 
 //https://faye.jcoglan.com/architecture.html
 type client interface {
-	Subscribe(subscription string, onMsg func(message *message.Message)) error
-	Publish(subscription string, message *message.Message) error
+	Subscribe(subscription string, onMsg func(data message.Data)) error
+	Publish(subscription string, data message.Data) error
 	//todo unsubscribe,etc
 }
 
@@ -82,10 +82,10 @@ func WithTransport(t transport.Transport) Option {
 	}
 }
 
-func (c *Client) Subscribe(subscription string, onMsg func(message *message.Message)) error {
+func (c *Client) Subscribe(subscription string, onMsg func(message message.Data)) error {
 	return c.opts.transport.Subscribe(subscription, onMsg)
 }
 
-func (c *Client) Publish(subscription string, message *message.Message) error {
-	return c.opts.transport.Publish(subscription, message)
+func (c *Client) Publish(subscription string, data message.Data) error {
+	return c.opts.transport.Publish(subscription, data)
 }

@@ -4,6 +4,8 @@ import "errors"
 
 type Extension func(message *Message)
 
+type Data = interface{}
+
 type Message struct {
 	Channel                  string      `json:"channel,omitempty"`
 	Version                  string      `json:"version,omitempty"`
@@ -15,7 +17,7 @@ type Message struct {
 	Id                       string      `json:"id,omitempty"`
 	ClientId                 string      `json:"clientId,omitempty"`
 	Advice                   Advise      `json:"advice,omitempty"`
-	Data                     interface{} `json:"data,omitempty"`
+	Data                     Data        `json:"data,omitempty"`
 	Timestamp                uint64      `json:"timestamp,omitempty"`
 	AuthSuccessful           bool        `json:"authSuccessful,omitempty"`
 	Error                    string      `json:"error,omitempty"`
