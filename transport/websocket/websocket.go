@@ -202,6 +202,12 @@ func (w *Websocket) Disconnect() error {
 
 	w.stopCh <- nil
 	close(w.stopCh)
+	w.subsMu.Lock()
+	for i := range w.subs {
+		close(w.subs[i])
+		delete(w.subs, i)
+	}
+	w.subsMu.Unlock()
 
 	return w.sendMessage(&m)
 }
@@ -245,6 +251,14 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 		ClientId:     w.clientID,
 		Id:           w.nextMsgID(),
 	}
+	w.subsMu.Lock()
+	sub, ok := w.subs[subscription]
+	if ok {
+		close(sub)
+		delete(w.subs, subscription)
+	}
+	w.subsMu.Unlock()
+
 	return w.sendMessage(m)
 }
 
