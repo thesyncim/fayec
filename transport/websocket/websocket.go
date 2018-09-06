@@ -89,8 +89,8 @@ func (w *Websocket) readWorker() error {
 					if !ok {
 						panic("BUG: subscription not registered `" + msg.Subscription + "`")
 					}
-					if msg.GetError() != nil {
-						//inject the error
+					if msg.GetError() == nil {
+						//inject the error if the server returns unsuccessful without error
 						msg.Error = fmt.Sprintf("susbscription `%s` failed", msg.Subscription)
 					}
 					subscription <- msg
@@ -99,16 +99,7 @@ func (w *Websocket) readWorker() error {
 					delete(w.subs, msg.Channel)
 					w.subsMu.Unlock()
 				}
-			case transport.MetaUnsubscribe:
-				//handle MetaUnsubscribe resp
-			case transport.MetaConnect:
-				//handle MetaConnect resp
 
-			case transport.MetaDisconnect:
-				//handle MetaDisconnect resp
-
-			case transport.MetaHandshake:
-				//handle MetaHandshake resp
 			}
 
 			continue
@@ -277,6 +268,10 @@ func (w *Websocket) Unsubscribe(subscription string) error {
 		delete(w.subs, subscription)
 	}
 	w.subsMu.Unlock()
+	//remove onPublishResponse handler
+	w.onPubResponseMu.Lock()
+	delete(w.onPublishResponse, subscription)
+	w.onPubResponseMu.Unlock()
 
 	return w.sendMessage(m)
 }
