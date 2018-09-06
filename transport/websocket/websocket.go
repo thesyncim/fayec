@@ -20,11 +20,13 @@ func init() {
 //Websocket represents an websocket transport for the faye protocol
 type Websocket struct {
 	TransportOpts *transport.Options
-	conn          *websocket.Conn
-	clientID      string
-	msgID         *uint64
-	once          sync.Once
-	advice        atomic.Value //type message.Advise
+
+	connMu   sync.Mutex
+	conn     *websocket.Conn
+	clientID string
+	msgID    *uint64
+	once     sync.Once
+	advice   atomic.Value //type message.Advise
 
 	stopCh chan error
 
@@ -46,6 +48,7 @@ func (w *Websocket) Init(options *transport.Options) error {
 	w.TransportOpts = options
 	w.msgID = &msgID
 	w.subs = map[string]chan *message.Message{}
+	w.onPublishResponse = map[string]func(message *message.Message){}
 	w.stopCh = make(chan error)
 	w.conn, _, err = websocket.DefaultDialer.Dial(options.Url, nil)
 	if err != nil {
@@ -68,6 +71,7 @@ func (w *Websocket) readWorker() error {
 		}
 		//dispatch
 		msg := &payload[0]
+		w.applyInExtensions(msg)
 
 		if msg.Advice != nil {
 			w.handleAdvise(msg.Advice)
@@ -116,14 +120,15 @@ func (w *Websocket) readWorker() error {
 
 		if transport.IsEventDelivery(msg) {
 			w.subsMu.Lock()
-			subscription := w.subs[msg.Channel]
+			subscription, ok := w.subs[msg.Channel]
 			w.subsMu.Unlock()
 
-			w.applyInExtensions(msg)
-
-			if subscription != nil {
-				subscription <- msg
+			if ok {
+				if subscription != nil {
+					subscription <- msg
+				}
 			}
+
 			continue
 		}
 
@@ -145,6 +150,8 @@ func (w *Websocket) Name() string {
 }
 
 func (w *Websocket) sendMessage(m *message.Message) error {
+	w.connMu.Lock()
+	defer w.connMu.Unlock()
 	w.applyOutExtensions(m)
 
 	var payload []message.Message
