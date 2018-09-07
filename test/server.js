@@ -11,7 +11,6 @@ var unauthorized = [
 bayeux.addExtension({
     incoming: function (message, callback) {
         if (message.channel === '/meta/subscribe') {
-            console.log(message)
             if (unauthorized.indexOf(message.subscription) >= 0) {
                 message.error = '500::unauthorized channel';
             }

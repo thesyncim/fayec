@@ -1,59 +1,60 @@
-package faye_test
+package test
 
 import (
+	"context"
+	"fmt"
 	"github.com/pkg/errors"
-	"github.com/thesyncim/faye"
+	. "github.com/thesyncim/faye"
 	"github.com/thesyncim/faye/extensions"
 	"github.com/thesyncim/faye/message"
+	"github.com/thesyncim/faye/subscription"
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
 )
 
-type cancelFn func()
+var once sync.Once
 
 var unauthorizedErr = errors.New("500::unauthorized channel")
 
-func setup(t *testing.T) (cancelFn, error) {
-	cmd := exec.Command("npm", "start")
+func setup(t *testing.T) context.CancelFunc {
+
+	//jump to test dir
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	cmd := exec.CommandContext(ctx,
+		"npm", "start")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	err := cmd.Start()
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 
-	var cancel = func() {
-		cmd.Process.Signal(os.Kill)
-		log.Println("canceled")
-	}
-	go func() {
-		select {
-		case <-time.After(time.Second * 30):
-			cancel()
-			t.Fatal("test failed")
-			os.Exit(1)
+	var mcancel context.CancelFunc = func() {
 
+		if runtime.GOOS == "windows" {
+			exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprint(cmd.Process.Pid)).Run()
 		}
-	}()
+		cancel()
+	}
 
-	return cancel, nil
+	return mcancel
 }
 
 func TestServerSubscribeAndPublish10Messages(t *testing.T) {
-	shutdown, err := setup(t)
-	if err != nil {
-		t.Fatal(err)
-	}
+	shutdown := setup(t)
+
 	defer shutdown()
 
 	debug := extensions.NewDebugExtension(os.Stdout)
 
-	client, err := fayec.NewClient("ws://localhost:8000/faye", fayec.WithExtension(debug.InExtension, debug.OutExtension))
+	client, err := NewClient("ws://localhost:8000/faye", WithExtension(debug.InExtension, debug.OutExtension))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,13 +69,20 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 		delivered++
 		done.Done()
 	})
-
+	var sub *subscription.Subscription
 	go func() {
-		client.Subscribe("/test", func(data message.Data) {
+		sub, err = client.Subscribe("/test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = sub.OnMessage(func(data message.Data) {
 			if data != "hello world" {
 				t.Fatalf("expecting: `hello world` got : %s", data)
 			}
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	//give some time for setup
@@ -88,7 +96,7 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 	}
 
 	done.Wait()
-	err = client.Unsubscribe("/test")
+	err = sub.Unsubscribe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,24 +112,21 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 }
 
 func TestSubscribeUnauthorizedChannel(t *testing.T) {
-	shutdown, err := setup(t)
-	if err != nil {
-		t.Fatal(err)
-	}
+	shutdown := setup(t)
+
 	defer shutdown()
 
 	debug := extensions.NewDebugExtension(os.Stdout)
 
-	client, err := fayec.NewClient("ws://localhost:8000/faye", fayec.WithExtension(debug.InExtension, debug.OutExtension))
+	client, err := NewClient("ws://localhost:8000/faye", WithExtension(debug.InExtension, debug.OutExtension))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = client.Subscribe("/unauthorized", func(data message.Data) {
-		t.Fatal("received message on unauthorized channel")
-	})
+	_, err = client.Subscribe("/unauthorized")
 	if err.Error() != unauthorizedErr.Error() {
 		t.Fatalf("expecting `500::unauthorized channel` got : `%s`", err.Error())
 	}
+	log.Println(err)
 
 }

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/thesyncim/faye/message"
+	"github.com/thesyncim/faye/subscription"
 	"github.com/thesyncim/faye/transport"
+	"log"
 
 	"strconv"
 	"sync"
@@ -30,8 +32,11 @@ type Websocket struct {
 
 	stopCh chan error
 
-	subsMu sync.Mutex //todo sync.Map
-	subs   map[string]chan *message.Message
+	//subsMu sync.Mutex //todo sync.Map
+	//subs   map[string]chan *message.Message
+
+	subsMu2 sync.Mutex //todo sync.Map
+	subs2   map[string][]*subscription.Subscription
 
 	onPubResponseMu   sync.Mutex //todo sync.Map
 	onPublishResponse map[string]func(message *message.Message)
@@ -47,7 +52,8 @@ func (w *Websocket) Init(options *transport.Options) error {
 	)
 	w.TransportOpts = options
 	w.msgID = &msgID
-	w.subs = map[string]chan *message.Message{}
+	//w.subs = map[string]chan *message.Message{}
+	w.subs2 = map[string][]*subscription.Subscription{}
 	w.onPublishResponse = map[string]func(message *message.Message){}
 	w.stopCh = make(chan error)
 	w.conn, _, err = websocket.DefaultDialer.Dial(options.Url, nil)
@@ -82,10 +88,10 @@ func (w *Websocket) readWorker() error {
 			switch msg.Channel {
 			case transport.MetaSubscribe:
 				//handle MetaSubscribe resp
+				w.subsMu2.Lock()
+				subscriptions, ok := w.subs2[msg.Subscription]
 				if !msg.Successful {
-					w.subsMu.Lock()
-					subscription, ok := w.subs[msg.Subscription]
-					w.subsMu.Unlock()
+
 					if !ok {
 						panic("BUG: subscription not registered `" + msg.Subscription + "`")
 					}
@@ -93,12 +99,38 @@ func (w *Websocket) readWorker() error {
 						//inject the error if the server returns unsuccessful without error
 						msg.Error = fmt.Sprintf("susbscription `%s` failed", msg.Subscription)
 					}
-					subscription <- msg
-					close(subscription)
-					w.subsMu.Lock()
-					delete(w.subs, msg.Channel)
-					w.subsMu.Unlock()
+					var si = -1
+					for i := range subscriptions {
+						if subscriptions[i].ID() == msg.Id {
+							si = i
+							select {
+							case subscriptions[i].SubscriptionResult() <- msg.GetError():
+								close(subscriptions[i].MsgChannel())
+								/*default:
+								log.Println("subscription has no listeners") //todo remove*/
+							}
+						}
+					}
+					//remove subscription
+					if si > -1 {
+						subscriptions = subscriptions[:si+copy(subscriptions[si:], subscriptions[si+1:])]
+					}
+
+					w.subs2[msg.Subscription] = subscriptions
+					//v2
+				} else {
+					for i := range subscriptions {
+						if subscriptions[i].ID() == msg.Id {
+							select {
+							case subscriptions[i].SubscriptionResult() <- nil:
+							default:
+								log.Println("subscription has no listeners") //todo remove*/
+							}
+
+						}
+					}
 				}
+				w.subsMu2.Unlock()
 
 			}
 
@@ -108,17 +140,25 @@ func (w *Websocket) readWorker() error {
 		//there are 2 types of Event Message
 		// 1. Publish
 		// 2. Delivery
-
 		if transport.IsEventDelivery(msg) {
-			w.subsMu.Lock()
-			subscription, ok := w.subs[msg.Channel]
-			w.subsMu.Unlock()
+			w.subsMu2.Lock()
+			subscriptions, ok := w.subs2[msg.Channel]
 
 			if ok {
-				if subscription != nil {
-					subscription <- msg
+				//send to all listeners
+				for i := range subscriptions {
+					if subscriptions[i].MsgChannel() != nil {
+						select {
+						case subscriptions[i].MsgChannel() <- msg:
+						default:
+							log.Println("subscription has no listeners") //todo remove
+
+						}
+					}
 				}
+
 			}
+			w.subsMu2.Unlock()
 
 			continue
 		}
@@ -193,7 +233,6 @@ func (w *Websocket) Connect() error {
 		ConnectionType: transportName,
 		Id:             w.nextMsgID(),
 	}
-	//todo expect connect resp from server
 	go w.readWorker()
 	return w.sendMessage(&m)
 }
@@ -209,16 +248,54 @@ func (w *Websocket) Disconnect() error {
 
 	w.stopCh <- nil
 	close(w.stopCh)
-	w.subsMu.Lock()
-	for i := range w.subs {
-		close(w.subs[i])
-		delete(w.subs, i)
+	w.subsMu2.Lock()
+	for i := range w.subs2 {
+		//close all listeners
+		for j := range w.subs2[i] {
+			close(w.subs2[i][j].MsgChannel())
+		}
+		delete(w.subs2, i)
 	}
-	w.subsMu.Unlock()
+	w.subsMu2.Unlock()
 
 	return w.sendMessage(&m)
 }
 
+//Subscribe informs the server that messages published to that channel are delivered to itself.
+func (w *Websocket) Subscribe(channel string) (*subscription.Subscription, error) {
+	id := w.nextMsgID()
+	m := &message.Message{
+		Channel:      transport.MetaSubscribe,
+		ClientId:     w.clientID,
+		Subscription: channel,
+		Id:           id,
+	}
+
+	if err := w.sendMessage(m); err != nil {
+		return nil, err
+	}
+
+	//todo validate
+	inMsgCh := make(chan *message.Message, 0)
+	subRes := make(chan error)
+
+	sub := subscription.NewSubscription(id, channel, w, inMsgCh, subRes)
+
+	w.subsMu2.Lock()
+	w.subs2[channel] = append(w.subs2[channel], sub)
+	w.subsMu2.Unlock()
+
+	//todo timeout here
+	err := <-subRes
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	log.Println(sub)
+	return sub, nil
+}
+
+/*
 //Subscribe informs the server that messages published to that channel are delivered to itself.
 func (w *Websocket) Subscribe(subscription string, onMessage func(data message.Data)) error {
 	m := &message.Message{
@@ -250,30 +327,45 @@ func (w *Websocket) Subscribe(subscription string, onMessage func(data message.D
 	// return nil for now
 	return nil
 }
-
+*/
 //Unsubscribe informs the server that the client will no longer listen to incoming event messages on
 //the specified channel/subscription
-func (w *Websocket) Unsubscribe(subscription string) error {
+func (w *Websocket) Unsubscribe(subscription *subscription.Subscription) error {
 	//https://docs.cometd.org/current/reference/#_bayeux_meta_unsubscribe
-	m := &message.Message{
-		Channel:      transport.MetaUnsubscribe,
-		Subscription: subscription,
-		ClientId:     w.clientID,
-		Id:           w.nextMsgID(),
-	}
-	w.subsMu.Lock()
-	sub, ok := w.subs[subscription]
+	w.subsMu2.Lock()
+	defer w.subsMu2.Unlock()
+	subs, ok := w.subs2[subscription.Channel()]
 	if ok {
-		close(sub)
-		delete(w.subs, subscription)
+		var si = -1
+		for i := range subs {
+			if subs[i] == subscription {
+				close(subs[i].MsgChannel())
+				si = i
+			}
+		}
+		if si > -1 {
+			//remove the subscription
+			subs = subs[:si+copy(subs[si:], subs[si+1:])]
+		}
+		w.subs2[subscription.Channel()] = subs
+		//if no more listeners to this subscription send unsubscribe to server
+		if len(subs) == 0 {
+			delete(w.subs2, subscription.Channel())
+			//remove onPublishResponse handler
+			w.onPubResponseMu.Lock()
+			delete(w.onPublishResponse, subscription.Channel())
+			w.onPubResponseMu.Unlock()
+			m := &message.Message{
+				Channel:      transport.MetaUnsubscribe,
+				Subscription: subscription.Channel(),
+				ClientId:     w.clientID,
+				Id:           w.nextMsgID(),
+			}
+			return w.sendMessage(m)
+		}
 	}
-	w.subsMu.Unlock()
-	//remove onPublishResponse handler
-	w.onPubResponseMu.Lock()
-	delete(w.onPublishResponse, subscription)
-	w.onPubResponseMu.Unlock()
 
-	return w.sendMessage(m)
+	return nil
 }
 
 //Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event

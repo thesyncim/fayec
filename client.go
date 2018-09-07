@@ -2,6 +2,7 @@ package fayec
 
 import (
 	"github.com/thesyncim/faye/message"
+	"github.com/thesyncim/faye/subscription"
 	"github.com/thesyncim/faye/transport"
 	_ "github.com/thesyncim/faye/transport/websocket"
 )
@@ -19,8 +20,8 @@ var defaultOpts = options{
 //https://faye.jcoglan.com/architecture.html
 type client interface {
 	Disconnect() error
-	Subscribe(subscription string, onMessage func(message message.Data)) error
-	Unsubscribe(subscription string) error
+	Subscribe(subscription string) (*subscription.Subscription, error)
+	//Unsubscribe(subscription string) error
 	Publish(subscription string, message message.Data) (string, error)
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
@@ -64,14 +65,8 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 }
 
 //Subscribe informs the server that messages published to that channel are delivered to itself.
-func (c *Client) Subscribe(subscription string, onMsg func(message message.Data)) error {
-	return c.opts.transport.Subscribe(subscription, onMsg)
-}
-
-//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
-//the specified channel/subscription
-func (c *Client) Unsubscribe(subscription string) error {
-	return c.opts.transport.Unsubscribe(subscription)
+func (c *Client) Subscribe(subscription string) (*subscription.Subscription, error) {
+	return c.opts.transport.Subscribe(subscription)
 }
 
 //Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event

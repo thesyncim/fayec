@@ -2,6 +2,7 @@ package transport
 
 import (
 	"github.com/thesyncim/faye/message"
+	"github.com/thesyncim/faye/subscription"
 	"time"
 )
 
@@ -30,13 +31,13 @@ type Transport interface {
 	//a connection is established by sending a message to the /meta/connect channel
 	Connect() error
 	//Disconnect closes all subscriptions and inform the server to remove any client-related state.
-	//any subsequent method call to the client object will result in undefined behaviour.
+	//any subsequent method call to the transport object will result in undefined behaviour.
 	Disconnect() error
 	//Subscribe informs the server that messages published to that channel are delivered to itself.
-	Subscribe(subscription string, onMessage func(message message.Data)) error
+	Subscribe(channel string) (*subscription.Subscription, error)
 	//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
 	//the specified channel/subscription
-	Unsubscribe(subscription string) error
+	Unsubscribe(sub *subscription.Subscription) error
 	//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
 	//if this feature is supported by the server use the OnPublishResponse to get the publish status.
 	Publish(subscription string, message message.Data) (id string, err error)
