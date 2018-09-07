@@ -154,7 +154,6 @@ func (w *Websocket) readWorker() error {
 						}
 					}
 				}
-
 			}
 			w.subsMu2.Unlock()
 

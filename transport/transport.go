@@ -98,6 +98,9 @@ func IsMetaMessage(msg *message.Message) bool {
 }
 
 func IsEventDelivery(msg *message.Message) bool {
+	if IsMetaMessage(msg) {
+		return false
+	}
 	if msg.Data != nil {
 		return true
 	}
@@ -105,6 +108,9 @@ func IsEventDelivery(msg *message.Message) bool {
 }
 
 func IsEventPublish(msg *message.Message) bool {
+	if IsMetaMessage(msg) {
+		return false
+	}
 	return !IsEventDelivery(msg)
 }
 
