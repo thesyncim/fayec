@@ -4,19 +4,22 @@ import (
 	"github.com/thesyncim/faye/message"
 )
 
-type Unsubscriber interface {
-	Unsubscribe(subscription *Subscription) error
-}
+type Unsubscriber func(subscription *Subscription) error
+
+type Publisher func(msg message.Data) (string, error)
+
 type Subscription struct {
 	id      string //request Subscription ID
 	channel string
 	ok      chan error //used by
 	unsub   Unsubscriber
+	pub     Publisher
 	msgCh   chan *message.Message
 }
 
-func NewSubscription(id string, chanel string, unsub Unsubscriber, msgCh chan *message.Message, ok chan error) *Subscription {
+func NewSubscription(id string, chanel string, unsub Unsubscriber, pub Publisher, msgCh chan *message.Message, ok chan error) *Subscription {
 	return &Subscription{
+		pub:     pub,
 		ok:      ok,
 		id:      id,
 		channel: chanel,
@@ -53,5 +56,9 @@ func (s *Subscription) SubscriptionResult() chan error {
 }
 
 func (s *Subscription) Unsubscribe() error {
-	return s.unsub.Unsubscribe(s)
+	return s.unsub(s)
+}
+
+func (s *Subscription) Publish(msg message.Data) (string, error) {
+	return s.pub(msg)
 }

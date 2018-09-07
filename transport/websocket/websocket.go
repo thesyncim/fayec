@@ -90,11 +90,10 @@ func (w *Websocket) readWorker() error {
 				//handle MetaSubscribe resp
 				w.subsMu2.Lock()
 				subscriptions, ok := w.subs2[msg.Subscription]
+				if !ok {
+					panic("BUG: subscription not registered `" + msg.Subscription + "`")
+				}
 				if !msg.Successful {
-
-					if !ok {
-						panic("BUG: subscription not registered `" + msg.Subscription + "`")
-					}
 					if msg.GetError() == nil {
 						//inject the error if the server returns unsuccessful without error
 						msg.Error = fmt.Sprintf("susbscription `%s` failed", msg.Subscription)
@@ -106,7 +105,7 @@ func (w *Websocket) readWorker() error {
 							select {
 							case subscriptions[i].SubscriptionResult() <- msg.GetError():
 								close(subscriptions[i].MsgChannel())
-								/*default:
+							default:
 								log.Println("subscription has no listeners") //todo remove*/
 							}
 						}
@@ -126,7 +125,6 @@ func (w *Websocket) readWorker() error {
 							default:
 								log.Println("subscription has no listeners") //todo remove*/
 							}
-
 						}
 					}
 				}
@@ -275,11 +273,13 @@ func (w *Websocket) Subscribe(channel string) (*subscription.Subscription, error
 		return nil, err
 	}
 
-	//todo validate
 	inMsgCh := make(chan *message.Message, 0)
 	subRes := make(chan error)
 
-	sub := subscription.NewSubscription(id, channel, w, inMsgCh, subRes)
+	var pub = func(data message.Data) (string, error) {
+		return w.Publish(channel, data)
+	}
+	sub := subscription.NewSubscription(id, channel, w.Unsubscribe, pub, inMsgCh, subRes)
 
 	w.subsMu2.Lock()
 	w.subs2[channel] = append(w.subs2[channel], sub)
