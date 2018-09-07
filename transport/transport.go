@@ -69,23 +69,6 @@ const (
 	EventDelivery
 )
 
-type Reconnect = string
-
-const (
-	//ReconnectRetry indicates that a client MAY attempt to reconnect with a /meta/connect message,
-	//after the interval (as defined by interval advice field or client-default backoff), and with the same credentials.
-	ReconnectRetry Reconnect = "retry"
-
-	//ReconnectHandshake indicates that the server has terminated any prior connection status and the client MUST reconnect
-	// with a /meta/handshake message.
-	//A client MUST NOT automatically retry when a reconnect advice handshake has been received.
-	ReconnectHandshake Reconnect = "handshake"
-
-	//ReconnectNone indicates a hard failure for the connect attempt.
-	//A client MUST respect reconnect advice none and MUST NOT automatically retry or handshake.
-	ReconnectNone Reconnect = "none"
-)
-
 var metaMessages = []MetaMessage{MetaSubscribe, MetaConnect, MetaUnsubscribe, MetaHandshake, MetaDisconnect}
 
 func IsMetaMessage(msg *message.Message) bool {

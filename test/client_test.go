@@ -124,9 +124,13 @@ func TestSubscribeUnauthorizedChannel(t *testing.T) {
 	}
 
 	_, err = client.Subscribe("/unauthorized")
-	if err.Error() != unauthorizedErr.Error() {
-		t.Fatalf("expecting `500::unauthorized channel` got : `%s`", err.Error())
+	if err != nil {
+		if err.Error() != unauthorizedErr.Error() {
+			t.Fatalf("expecting `500::unauthorized channel` got : `%s`", err.Error())
+		}
+		return
 	}
-	log.Println(err)
+
+	t.Fatal("expecting error")
 
 }

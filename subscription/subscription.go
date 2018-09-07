@@ -51,6 +51,7 @@ func (s *Subscription) Channel() string {
 	return s.channel
 }
 
+//todo remove
 func (s *Subscription) SubscriptionResult() chan error {
 	return s.ok
 }
