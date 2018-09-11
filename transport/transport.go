@@ -3,16 +3,20 @@ package transport
 import (
 	"github.com/thesyncim/faye/message"
 	"github.com/thesyncim/faye/subscription"
+	"net/http"
 	"time"
 )
 
 //Options represents the connection options to be used by a transport
 type Options struct {
-	RetryInterval time.Duration
-
 	Extensions message.Extensions
-	//todo dial timeout
-	//todo read/write deadline
+
+	Headers http.Header
+
+	RetryInterval time.Duration
+	DialDeadline  time.Duration
+	ReadDeadline  time.Duration
+	WriteDeadline time.Duration
 }
 
 //Transport represents the transport to be used to comunicate with the faye server

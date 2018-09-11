@@ -56,7 +56,7 @@ func (w *Websocket) Init(endpoint string, options *transport.Options) error {
 	w.subs2 = map[string][]*subscription.Subscription{}
 	w.onPublishResponse = map[string]func(message *message.Message){}
 	w.stopCh = make(chan error)
-	w.conn, _, err = websocket.DefaultDialer.Dial(endpoint, nil)
+	w.conn, _, err = websocket.DefaultDialer.Dial(endpoint, options.Headers)
 	if err != nil {
 		return err
 	}
