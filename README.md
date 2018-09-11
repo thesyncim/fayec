@@ -6,4 +6,5 @@ faye protocol implemented in go
 # TODO
  - [ ] port complete javascript test suite to go
  - [ ] wildcard subscriptions
+ - [ ] services
 
