@@ -21,7 +21,7 @@ func init() {
 
 //Websocket represents an websocket transport for the faye protocol
 type Websocket struct {
-	TransportOpts *transport.Options
+	topts *transport.Options
 
 	connMu   sync.Mutex
 	conn     *websocket.Conn
@@ -45,18 +45,18 @@ type Websocket struct {
 var _ transport.Transport = (*Websocket)(nil)
 
 //Init initializes the transport with the provided options
-func (w *Websocket) Init(options *transport.Options) error {
+func (w *Websocket) Init(endpoint string, options *transport.Options) error {
 	var (
 		err   error
 		msgID uint64
 	)
-	w.TransportOpts = options
+	w.topts = options
 	w.msgID = &msgID
 	//w.subs = map[string]chan *message.Message{}
 	w.subs2 = map[string][]*subscription.Subscription{}
 	w.onPublishResponse = map[string]func(message *message.Message){}
 	w.stopCh = make(chan error)
-	w.conn, _, err = websocket.DefaultDialer.Dial(options.Url, nil)
+	w.conn, _, err = websocket.DefaultDialer.Dial(endpoint, nil)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (w *Websocket) readWorker() error {
 		}
 		//dispatch
 		msg := &payload[0]
-		w.applyInExtensions(msg)
+		w.topts.Extensions.ApplyInExtensions(msg)
 
 		if msg.Advice != nil {
 			w.handleAdvise(msg.Advice)
@@ -180,7 +180,7 @@ func (w *Websocket) Name() string {
 func (w *Websocket) sendMessage(m *message.Message) error {
 	w.connMu.Lock()
 	defer w.connMu.Unlock()
-	w.applyOutExtensions(m)
+	w.topts.Extensions.ApplyOutExtensions(m)
 	var payload []message.Message
 	payload = append(payload, *m)
 
@@ -203,7 +203,7 @@ func (w *Websocket) nextMsgID() string {
 
 //Options return the transport Options
 func (w *Websocket) Options() *transport.Options {
-	return w.TransportOpts
+	return w.topts
 }
 
 //Handshake initiates a connection negotiation by sending a message to the /meta/handshake channel.
@@ -224,7 +224,7 @@ func (w *Websocket) Handshake() (err error) {
 	}
 
 	resp := &hsResps[0]
-	w.applyInExtensions(resp)
+	w.topts.Extensions.ApplyInExtensions(resp)
 	if resp.GetError() != nil {
 		return err
 	}
@@ -369,18 +369,6 @@ func (w *Websocket) OnPublishResponse(subscription string, onMsg func(message *m
 	w.onPubResponseMu.Lock()
 	w.onPublishResponse[subscription] = onMsg
 	w.onPubResponseMu.Unlock()
-}
-
-func (w *Websocket) applyOutExtensions(m *message.Message) {
-	for i := range w.TransportOpts.OutExt {
-		w.TransportOpts.OutExt[i](m)
-	}
-}
-
-func (w *Websocket) applyInExtensions(m *message.Message) {
-	for i := range w.TransportOpts.InExt {
-		w.TransportOpts.InExt[i](m)
-	}
 }
 
 func (w *Websocket) handleAdvise(m *message.Advise) {

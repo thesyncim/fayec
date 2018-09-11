@@ -9,6 +9,23 @@ import (
 
 type Extension func(message *Message)
 
+type Extensions struct {
+	In  []Extension
+	Out []Extension
+}
+
+func (e *Extensions) ApplyOutExtensions(m *Message) {
+	for i := range e.Out {
+		e.Out[i](m)
+	}
+}
+
+func (e *Extensions) ApplyInExtensions(m *Message) {
+	for i := range e.In {
+		e.In[i](m)
+	}
+}
+
 type Data = interface{}
 
 type Message struct {

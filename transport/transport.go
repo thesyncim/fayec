@@ -8,11 +8,9 @@ import (
 
 //Options represents the connection options to be used by a transport
 type Options struct {
-	Url           string
 	RetryInterval time.Duration
 
-	InExt  []message.Extension
-	OutExt []message.Extension
+	Extensions message.Extensions
 	//todo dial timeout
 	//todo read/write deadline
 }
@@ -22,7 +20,7 @@ type Transport interface {
 	//Name returns the transport name
 	Name() string
 	//Init initializes the transport with the provided options
-	Init(options *Options) error
+	Init(endpoint string, options *Options) error
 	//Options return the transport Options
 	Options() *Options
 	//Handshake initiates a connection negotiation by sending a message to the /meta/handshake channel.

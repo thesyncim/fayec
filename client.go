@@ -8,9 +8,8 @@ import (
 )
 
 type options struct {
-	inExt     []message.Extension
-	outExt    []message.Extension
 	transport transport.Transport
+	tOpts     transport.Options
 }
 
 var defaultOpts = options{
@@ -43,13 +42,9 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 	for _, opt := range opts {
 		opt(&c.opts)
 	}
-	tops := &transport.Options{
-		Url:    url,
-		InExt:  c.opts.inExt,
-		OutExt: c.opts.outExt,
-	}
+
 	var err error
-	if err = c.opts.transport.Init(tops); err != nil {
+	if err = c.opts.transport.Init(url, &c.opts.tOpts); err != nil {
 		return nil, err
 	}
 
@@ -89,11 +84,11 @@ func (c *Client) Disconnect() error {
 	return c.opts.transport.Disconnect()
 }
 
-//WithOutExtension append the provided outgoing extension to the list of outgoing extensions.
+//WithOutExtension append the provided outgoing extension to the the default transport options
 //extensions run in the order that they are provided
 func WithOutExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.outExt = append(o.outExt, extension)
+		o.tOpts.Extensions.Out = append(o.tOpts.Extensions.Out, extension)
 	}
 }
 
@@ -101,8 +96,8 @@ func WithOutExtension(extension message.Extension) Option {
 //extensions run in the order that they are provided
 func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 	return func(o *options) {
-		o.inExt = append(o.inExt, inExt)
-		o.outExt = append(o.outExt, outExt)
+		o.tOpts.Extensions.In = append(o.tOpts.Extensions.In, inExt)
+		o.tOpts.Extensions.Out = append(o.tOpts.Extensions.Out, outExt)
 	}
 }
 
@@ -110,7 +105,7 @@ func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 //extensions run in the order that they are provided
 func WithInExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.inExt = append(o.inExt, extension)
+		o.tOpts.Extensions.In = append(o.tOpts.Extensions.In, extension)
 	}
 }
 
