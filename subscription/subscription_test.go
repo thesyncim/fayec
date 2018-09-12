@@ -21,14 +21,14 @@ func TestIsValidChannel(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "single asterisc",
+			name: "single asterisk",
 			args: args{
 				channel: "/*",
 			},
 			want: true,
 		},
 		{
-			name: "double asterisc",
+			name: "double asterisk",
 			args: args{
 				channel: "/**",
 			},
@@ -56,7 +56,7 @@ func TestIsValidChannel(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "invalid asterisc at the middle",
+			name: "invalid asterisk at the middle",
 			args: args{
 				channel: "/foo/**/bar",
 			},
