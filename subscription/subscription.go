@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"github.com/thesyncim/faye/message"
+	"regexp"
 )
 
 type Unsubscriber func(subscription *Subscription) error
@@ -62,4 +63,11 @@ func (s *Subscription) Unsubscribe() error {
 
 func (s *Subscription) Publish(msg message.Data) (string, error) {
 	return s.pub(msg)
+}
+
+var validChannelName = regexp.MustCompile(`^\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*$`)
+var validChannelPattern = regexp.MustCompile(`^(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*\/\*{1,2}$`)
+
+func IsValidChannel(channel string) bool {
+	return validChannelName.MatchString(channel) || validChannelPattern.MatchString(channel)
 }
