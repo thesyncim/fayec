@@ -48,6 +48,8 @@ type Transport interface {
 	//ever be triggered
 	//can be used to identify the status of the published request and for example retry failed published requests
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
+	//OnError sets the handler to be triggered if some error appears
+	OnError(onErr func(err error))
 }
 
 //MetaMessage are channels commencing with the /meta/ segment ans, are the channels used by the faye protocol itself.

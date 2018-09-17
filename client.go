@@ -23,6 +23,7 @@ type client interface {
 	//Unsubscribe(subscription string) error
 	Publish(subscription string, message message.Data) (string, error)
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
+	OnTransportError(onErr func(err error))
 }
 
 //Option set the Client options, such as Transport, message extensions,etc.
@@ -76,6 +77,10 @@ func (c *Client) Publish(subscription string, data message.Data) (id string, err
 //can be used to identify the status of the published request and for example retry failed published requests.
 func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
 	c.opts.transport.OnPublishResponse(subscription, onMsg)
+}
+
+func (c *Client) OnTransportError(onErr func(err error)) {
+	c.opts.transport.OnError(onErr)
 }
 
 //Disconnect closes all subscriptions and inform the server to remove any client-related state.
