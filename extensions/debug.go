@@ -8,7 +8,7 @@ import (
 )
 
 func debugJson(v interface{}) string {
-	b, _ := json.MarshalIndent(v, "", " ")
+	b, _ := json.MarshalIndent(v, "", "  ")
 	return string(b)
 }
 
@@ -20,7 +20,7 @@ type DebugExtension struct {
 
 func NewDebugExtension(out io.Writer) *DebugExtension {
 	li := log.New(out, "InMsg", 0)
-	lo := log.New(out, "outMsg", 0)
+	lo := log.New(out, "OutMsg", 0)
 	return &DebugExtension{in: li, out: lo}
 }
 

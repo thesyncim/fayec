@@ -315,10 +315,10 @@ func (w *Websocket) Subscribe(channel string) (*subscription.Subscription, error
 	//todo timeout here
 	err := <-subRes
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		return nil, err
 	}
-	log.Println(sub)
+	//log.Println(sub)
 	return sub, nil
 }
 
