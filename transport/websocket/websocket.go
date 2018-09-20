@@ -37,6 +37,7 @@ type Websocket struct {
 
 	onPubResponseMu   sync.Mutex //todo sync.Map
 	onPublishResponse map[string]func(message *message.Message)
+	onError func(err error)
 }
 
 var _ transport.Transport = (*Websocket)(nil)
@@ -52,6 +53,7 @@ func (w *Websocket) Init(endpoint string, options *transport.Options) error {
 	//w.subs = map[string]chan *message.Message{}
 	w.subscriptions = map[string][]*subscription.Subscription{}
 	w.onPublishResponse = map[string]func(message *message.Message){}
+	w.onError = func(err error){}
 	w.stopCh = make(chan error)
 	w.conn, _, err = websocket.DefaultDialer.Dial(endpoint, options.Headers)
 	if err != nil {
@@ -83,12 +85,26 @@ func (w *Websocket) readWorker() error {
 		if transport.IsMetaMessage(msg) {
 			//handle it
 			switch msg.Channel {
+			case transport.MetaConnect:
+				advise := w.advice.Load().(*message.Advise)
+				if advise.Reconnect == message.ReconnectNone {
+					return w.Disconnect()
+				}
+				m := message.Message{
+					Channel:        transport.MetaConnect,
+					ClientId:       w.clientID,
+					ConnectionType: transportName,
+					Id:             w.nextMsgID(),
+				}
+				if err = w.sendMessage(&m); err != nil {
+					return err
+				}
 			case transport.MetaSubscribe:
 				//handle MetaSubscribe resp
 				w.subscriptionsMu.Lock()
 				subscriptions, ok := w.subscriptions[msg.Subscription]
 				if !ok {
-					panic("BUG: subscription not registered `" + msg.Subscription + "`")
+					return fmt.Errorf("BUG: subscription not registered `%s`", msg.Subscription)
 				}
 				if !msg.Successful {
 					if msg.GetError() == nil {
@@ -126,7 +142,6 @@ func (w *Websocket) readWorker() error {
 					}
 				}
 				w.subscriptionsMu.Unlock()
-
 			}
 
 			continue
@@ -238,7 +253,13 @@ func (w *Websocket) Connect() error {
 		ConnectionType: transportName,
 		Id:             w.nextMsgID(),
 	}
-	go w.readWorker()
+
+	go func () {
+		if err := w.readWorker(); err != nil {
+			w.onError(err)
+		}
+	}()
+
 	return w.sendMessage(&m)
 }
 
@@ -295,10 +316,10 @@ func (w *Websocket) Subscribe(channel string) (*subscription.Subscription, error
 	//todo timeout here
 	err := <-subRes
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		return nil, err
 	}
-	log.Println(sub)
+	//log.Println(sub)
 	return sub, nil
 }
 
@@ -366,6 +387,10 @@ func (w *Websocket) OnPublishResponse(subscription string, onMsg func(message *m
 	w.onPubResponseMu.Lock()
 	w.onPublishResponse[subscription] = onMsg
 	w.onPubResponseMu.Unlock()
+}
+
+func (w *Websocket) OnError(onErr func(err error)) {
+	w.onError = onErr
 }
 
 func (w *Websocket) handleAdvise(m *message.Advise) {
