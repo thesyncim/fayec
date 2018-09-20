@@ -62,17 +62,17 @@ func (w *Websocket) Init(endpoint string, options *transport.Options) error {
 	return nil
 }
 
-func (w *Websocket) readWorker() {
+func (w *Websocket) readWorker() error {
 	for {
 		select {
 		case err := <-w.stopCh:
-			panic(err)
+			return err
 		default:
 		}
 		var payload []message.Message
 		err := w.conn.ReadJSON(&payload)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		//dispatch
 		msg := &payload[0]
@@ -93,14 +93,14 @@ func (w *Websocket) readWorker() {
 					Id:             w.nextMsgID(),
 				}
 				if err = w.sendMessage(&m); err != nil {
-					panic(err)
+					return err
 				}
 			case transport.MetaSubscribe:
 				//handle MetaSubscribe resp
 				w.subscriptionsMu.Lock()
 				subscriptions, ok := w.subscriptions[msg.Subscription]
 				if !ok {
-					panic("BUG: subscription not registered `" + msg.Subscription + "`")
+					return fmt.Errorf("BUG: subscription not registered `%s`", msg.Subscription)
 				}
 				if !msg.Successful {
 					if msg.GetError() == nil {
@@ -251,12 +251,8 @@ func (w *Websocket) Connect() error {
 	}
 
 	go func () {
-		defer func() {
-			if r := recover(); r != nil {
-				w.onError(fmt.Errorf("%v", r))
-			}
-		}()
-		w.readWorker()
+		err := w.readWorker()
+		w.onError(err)
 	}()
 
 	return w.sendMessage(&m)
