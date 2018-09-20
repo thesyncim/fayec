@@ -86,6 +86,10 @@ func (w *Websocket) readWorker() error {
 			//handle it
 			switch msg.Channel {
 			case transport.MetaConnect:
+				advise := w.advice.Load().(*message.Advise)
+				if advise.Reconnect == message.ReconnectNone {
+					return w.Disconnect()
+				}
 				m := message.Message{
 					Channel:        transport.MetaConnect,
 					ClientId:       w.clientID,
@@ -251,8 +255,9 @@ func (w *Websocket) Connect() error {
 	}
 
 	go func () {
-		err := w.readWorker()
-		w.onError(err)
+		if err := w.readWorker(); err != nil {
+			w.onError(err)
+		}
 	}()
 
 	return w.sendMessage(&m)
