@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"crypto/tls"
 	"github.com/thesyncim/faye/message"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 type Options struct {
 	Headers http.Header
 	Cookies http.CookieJar
+	TLS     *tls.Config
 
 	MaxRetries    int
 	RetryInterval time.Duration
