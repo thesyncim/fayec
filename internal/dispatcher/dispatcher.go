@@ -12,25 +12,6 @@ import (
 	"sync/atomic"
 )
 
-type dispatcher interface {
-	SetTransport(t transport.Transport)
-	//Subscribe informs the server that messages published to that channel are delivered to itself.
-	Subscribe(channel string) (*subscription.Subscription, error)
-	//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
-	//the specified channel/subscription
-	Unsubscribe(sub *subscription.Subscription) error
-	//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
-	//if this feature is supported by the server use the OnPublishResponse to get the publish status.
-	Publish(subscription string, message message.Data) (id string, err error)
-	//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
-	//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
-	//ever be triggered
-	//can be used to identify the status of the published request and for example retry failed published requests
-	OnPublishResponse(subscription string, onMsg func(message *message.Message))
-}
-
-var _ dispatcher = (*Dispatcher)(nil)
-
 type Dispatcher struct {
 	endpoint string
 	//transports map[string]transport.Transport
@@ -46,8 +27,8 @@ type Dispatcher struct {
 	pendingSubsMu sync.Mutex
 	store         *store.SubscriptionsStore
 
-	onPublishResponseMu sync.Mutex //todo sync.Map
-	onPublishResponse   map[string]func(message *message.Message)
+	publishACKmu sync.Mutex
+	publishACK   map[string]chan error
 
 	clientID string
 }
@@ -55,13 +36,13 @@ type Dispatcher struct {
 func NewDispatcher(endpoint string, tOpts transport.Options, ext message.Extensions) *Dispatcher {
 	var msgID uint64
 	return &Dispatcher{
-		endpoint:          endpoint,
-		msgID:             &msgID,
-		store:             store.NewStore(100),
-		transportOpts:     tOpts,
-		extensions:        ext,
-		onPublishResponse: map[string]func(message *message.Message){},
-		pendingSubs:       map[string]chan error{},
+		endpoint:      endpoint,
+		msgID:         &msgID,
+		store:         store.NewStore(100),
+		transportOpts: tOpts,
+		extensions:    ext,
+		publishACK:    map[string]chan error{},
+		pendingSubs:   map[string]chan error{},
 	}
 }
 
@@ -165,11 +146,12 @@ func (d *Dispatcher) dispatchMessage(msg *message.Message) {
 	}
 
 	if message.IsEventPublish(msg) {
-		d.onPublishResponseMu.Lock()
-		onPublish, ok := d.onPublishResponse[msg.Channel]
-		d.onPublishResponseMu.Unlock()
+		d.publishACKmu.Lock()
+		publishACK, ok := d.publishACK[msg.Id]
+		d.publishACKmu.Unlock()
 		if ok {
-			onPublish(msg)
+			publishACK <- msg.GetError()
+			close(publishACK)
 		}
 	}
 
@@ -231,9 +213,9 @@ func (d *Dispatcher) Unsubscribe(sub *subscription.Subscription) error {
 	d.store.Remove(sub)
 	//if this is last subscription we will send meta unsubscribe to the server
 	if d.store.Count(sub.Name()) == 0 {
-		d.onPublishResponseMu.Lock()
-		delete(d.onPublishResponse, sub.Name())
-		d.onPublishResponseMu.Unlock()
+		d.publishACKmu.Lock()
+		delete(d.publishACK, sub.Name())
+		d.publishACKmu.Unlock()
 
 		m := &message.Message{
 			Channel:      message.MetaUnsubscribe,
@@ -247,8 +229,8 @@ func (d *Dispatcher) Unsubscribe(sub *subscription.Subscription) error {
 	return nil
 }
 
-func (d *Dispatcher) Publish(subscription string, data message.Data) (id string, err error) {
-	id = d.nextMsgID()
+func (d *Dispatcher) Publish(subscription string, data message.Data) (err error) {
+	id := d.nextMsgID()
 
 	m := &message.Message{
 		Channel:  subscription,
@@ -256,14 +238,28 @@ func (d *Dispatcher) Publish(subscription string, data message.Data) (id string,
 		ClientId: d.clientID,
 		Id:       id,
 	}
-	if err = d.sendMessage(m); err != nil {
-		return "", err
-	}
-	return id, nil
-}
 
-func (d *Dispatcher) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
-	d.onPublishResponseMu.Lock()
-	d.onPublishResponse[subscription] = onMsg
-	d.onPublishResponseMu.Unlock()
+	//ack from server
+	ack := make(chan error)
+	d.publishACKmu.Lock()
+	d.publishACK[id] = ack
+	d.publishACKmu.Unlock()
+
+	if err = d.sendMessage(m); err != nil {
+		return err
+	}
+
+	select { //todo timeout
+	case err = <-ack:
+	}
+
+	d.publishACKmu.Lock()
+	delete(d.publishACK, id)
+	d.publishACKmu.Unlock()
+
+	if err != nil { //todo retries
+		return err
+	}
+
+	return nil
 }

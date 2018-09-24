@@ -11,6 +11,7 @@ type Options struct {
 	Headers http.Header
 	Cookies http.CookieJar
 
+	MaxRetries    int
 	RetryInterval time.Duration
 	DialDeadline  time.Duration
 	ReadDeadline  time.Duration

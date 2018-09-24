@@ -22,8 +22,10 @@ var defaultOpts = options{
 type client interface {
 	Disconnect() error
 	Subscribe(subscription string) (*subscription.Subscription, error)
-	Publish(subscription string, message message.Data) (string, error)
-	OnPublishResponse(subscription string, onMsg func(message *message.Message))
+	Publish(subscription string, message message.Data) error
+
+	//SetOnTransportDownHandler(onTransportDown func(err error))
+	//SetOnTransportUpHandler(onTransportUp func())
 }
 
 //Option set the Client options, such as Transport, message extensions,etc.
@@ -62,16 +64,8 @@ func (c *Client) Subscribe(subscription string) (*subscription.Subscription, err
 
 //Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
 //if this feature is supported by the server use the OnPublishResponse to get the publish status.
-func (c *Client) Publish(subscription string, data message.Data) (id string, err error) {
+func (c *Client) Publish(subscription string, data message.Data) (err error) {
 	return c.dispatcher.Publish(subscription, data)
-}
-
-//OnPublishResponse sets the handler to be triggered if the server replies to the publish request.
-//According to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
-//ever be triggered.
-//can be used to identify the status of the published request and for example retry failed published requests.
-func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
-	c.dispatcher.OnPublishResponse(subscription, onMsg)
 }
 
 //Disconnect closes all subscriptions and inform the server to remove any client-related state.

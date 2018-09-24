@@ -4,20 +4,20 @@ import (
 	"strings"
 )
 
-type Name struct {
+type SubscriptionName struct {
 	n        string
 	patterns []string
 }
 
-func NewName(name string) *Name {
-	var n Name
+func NewName(name string) *SubscriptionName {
+	var n SubscriptionName
 	n.n = name
 	//expand once
 	n.patterns = n.expand()
 	return &n
 }
 
-func (n *Name) Match(channel string) bool {
+func (n *SubscriptionName) Match(channel string) bool {
 	for i := range n.patterns {
 		if n.patterns[i] == channel {
 			return true
@@ -26,7 +26,7 @@ func (n *Name) Match(channel string) bool {
 	return false
 }
 
-func (n *Name) expand() []string {
+func (n *SubscriptionName) expand() []string {
 	segments := strings.Split(n.n, "/")
 	num_segments := len(segments)
 	patterns := make([]string, num_segments+1)

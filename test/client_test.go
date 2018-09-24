@@ -64,14 +64,7 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 	var delivered int
 	var done sync.WaitGroup
 	done.Add(10)
-	client.OnPublishResponse("/test", func(msg *message.Message) {
-		if !msg.Successful {
-			t.Fatalf("failed to send msg with id %s", msg.Id)
-		}
 
-		delivered++
-		done.Done()
-	})
 	var sub *subscription.Subscription
 	go func() {
 		sub, err = client.Subscribe("/test")
@@ -79,6 +72,8 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = sub.OnMessage(func(channel string, data message.Data) {
+			delivered++
+			done.Done()
 			if data != "hello world" {
 				t.Fatalf("expecting: `hello world` got : %s", data)
 			}
@@ -91,11 +86,11 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 	//give some time for setup
 	time.Sleep(time.Second)
 	for i := 0; i < 10; i++ {
-		id, err := client.Publish("/test", "hello world")
+		err := client.Publish("/test", "hello world")
 		if err != nil {
 			t.Fatal(err)
 		}
-		log.Println(id, i)
+
 	}
 
 	done.Wait()
@@ -104,11 +99,11 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 		t.Fatal(err)
 	}
 	//try to publish one more message
-	id, err := client.Publish("/test", "hello world")
+	err = client.Publish("/test", "hello world")
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Println(id)
+
 	if delivered != 10 {
 		t.Fatal("message received after client unsubscribe")
 	}
@@ -169,7 +164,7 @@ func TestWildcardSubscription(t *testing.T) {
 
 	for _, channel := range []string{"/wildcard/foo", "/wildcard/bar"} {
 		for i := 0; i < 10; i++ {
-			_, err := client.Publish(channel, "hello world")
+			err := client.Publish(channel, "hello world")
 			if err != nil {
 				t.Fatal(err)
 			}

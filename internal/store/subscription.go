@@ -10,13 +10,13 @@ type SubscriptionsStore struct {
 	subs  map[string][]*subscription.Subscription
 
 	//cache for expanded channel names
-	cache map[string]*Name
+	cache map[string]*SubscriptionName
 }
 
 func NewStore(size int) *SubscriptionsStore {
 	return &SubscriptionsStore{
 		subs:  make(map[string][]*subscription.Subscription, size),
-		cache: map[string]*Name{},
+		cache: map[string]*SubscriptionName{},
 	}
 }
 
@@ -31,7 +31,7 @@ func (s *SubscriptionsStore) Add(sub *subscription.Subscription) {
 func (s *SubscriptionsStore) Match(channel string) []*subscription.Subscription {
 	var (
 		matches []*subscription.Subscription
-		name    *Name
+		name    *SubscriptionName
 		ok      bool
 	)
 	s.mutex.Lock()
