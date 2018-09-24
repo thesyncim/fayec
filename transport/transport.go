@@ -2,16 +2,14 @@ package transport
 
 import (
 	"github.com/thesyncim/faye/message"
-	"github.com/thesyncim/faye/subscription"
 	"net/http"
 	"time"
 )
 
 //Options represents the connection options to be used by a transport
 type Options struct {
-	Extensions message.Extensions
-
 	Headers http.Header
+	Cookies http.CookieJar
 
 	RetryInterval time.Duration
 	DialDeadline  time.Duration
@@ -21,82 +19,33 @@ type Options struct {
 
 //Transport represents the transport to be used to comunicate with the faye server
 type Transport interface {
-	//Name returns the transport name
+	//name returns the transport name
 	Name() string
 	//Init initializes the transport with the provided options
 	Init(endpoint string, options *Options) error
 	//Options return the transport Options
 	Options() *Options
 	//Handshake initiates a connection negotiation by sending a message to the /meta/handshake channel.
-	Handshake() error
-	//Connect is called  after a client has discovered the server’s capabilities with a handshake exchange,
+	Handshake(msg *message.Message) (*message.Message, error)
+	//Init is called  after a client has discovered the server’s capabilities with a handshake exchange,
 	//a connection is established by sending a message to the /meta/connect channel
-	Connect() error
+	Connect(msg *message.Message) error
 	//Disconnect closes all subscriptions and inform the server to remove any client-related state.
 	//any subsequent method call to the transport object will result in undefined behaviour.
-	Disconnect() error
-	//Subscribe informs the server that messages published to that channel are delivered to itself.
-	Subscribe(channel string) (*subscription.Subscription, error)
-	//Unsubscribe informs the server that the client will no longer listen to incoming event messages on
-	//the specified channel/subscription
-	Unsubscribe(sub *subscription.Subscription) error
-	//Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
-	//if this feature is supported by the server use the OnPublishResponse to get the publish status.
-	Publish(subscription string, message message.Data) (id string, err error)
-	//OnPublishResponse sets the handler to be triggered if the server replies to the publish request
-	//according to the spec the server MAY reply to the publish request, so its not guaranteed that this handler will
-	//ever be triggered
-	//can be used to identify the status of the published request and for example retry failed published requests
-	OnPublishResponse(subscription string, onMsg func(message *message.Message))
-}
+	Disconnect(msg *message.Message) error
+	//SendMessage sens a message through the transport
+	SendMessage(msg *message.Message) error
 
-//MetaMessage are channels commencing with the /meta/ segment ans, are the channels used by the faye protocol itself.
-type MetaMessage = string
+	SetOnMessageReceivedHandler(onMsg func(msg *message.Message))
 
-const (
-	MetaSubscribe   MetaMessage = "/meta/subscribe"
-	MetaConnect     MetaMessage = "/meta/connect"
-	MetaDisconnect  MetaMessage = "/meta/disconnect"
-	MetaUnsubscribe MetaMessage = "/meta/unsubscribe"
-	MetaHandshake   MetaMessage = "/meta/handshake"
-)
+	//SetOnTransportUpHandler is called when the transport is connected
+	SetOnTransportUpHandler(callback func())
 
-//EventMessage are published in event messages sent from a faye client to a faye server
-//and are delivered in event messages sent from a faye server to a faye client.
-type EventMessage = int
+	//SetOnTransportDownHandler is called when the transport goes down
+	SetOnTransportDownHandler(callback func(error))
 
-const (
-	//
-	EventPublish EventMessage = iota
-	EventDelivery
-)
-
-var metaMessages = []MetaMessage{MetaSubscribe, MetaConnect, MetaUnsubscribe, MetaHandshake, MetaDisconnect}
-
-func IsMetaMessage(msg *message.Message) bool {
-	for i := range metaMessages {
-		if msg.Channel == metaMessages[i] {
-			return true
-		}
-	}
-	return false
-}
-
-func IsEventDelivery(msg *message.Message) bool {
-	if IsMetaMessage(msg) {
-		return false
-	}
-	if msg.Data != nil {
-		return true
-	}
-	return false
-}
-
-func IsEventPublish(msg *message.Message) bool {
-	if IsMetaMessage(msg) {
-		return false
-	}
-	return !IsEventDelivery(msg)
+	//handled by dispatcher
+	SetOnErrorHandler(onError func(err error))
 }
 
 var registeredTransports = map[string]Transport{}

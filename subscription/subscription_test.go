@@ -1,20 +1,23 @@
 package subscription
 
-import "testing"
+import (
+	"testing"
+)
 
 /*
  assertEqual( ["/**", "/foo", "/*"],
-                   Channel.expand("/foo") )
+                   channel.expand("/foo") )
 
       assertEqual( ["/**", "/foo/bar", "/foo/*", "/foo/**"],
-                   Channel.expand("/foo/bar") )
+                   channel.expand("/foo/bar") )
 
       assertEqual( ["/**", "/foo/bar/qux", "/foo/bar/*", "/foo/**", "/foo/bar/**"],
 */
-func TestIsValidChannel(t *testing.T) {
+func TestIsValidSubscriptionName(t *testing.T) {
 	type args struct {
 		channel string
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -62,11 +65,18 @@ func TestIsValidChannel(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "asterisk before slash",
+			args: args{
+				channel: "/foo*",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsValidChannel(tt.args.channel); got != tt.want {
-				t.Errorf("IsValidChannel() = %v, want %v", got, tt.want)
+			if got := IsValidSubscriptionName(tt.args.channel); got != tt.want {
+				t.Errorf("isValidChannelName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -2,7 +2,6 @@ package extensions
 
 import (
 	"github.com/thesyncim/faye/message"
-	"github.com/thesyncim/faye/transport"
 )
 
 type GetStream struct {
@@ -18,10 +17,10 @@ func NewGetStream(apiKey string, signature string) GetStream {
 	}
 }
 
-func (gt GetStream) OutExtension(message *message.Message) {
-	if message.Channel == string(transport.MetaSubscribe) {
+func (gt GetStream) OutExtension(msg *message.Message) {
+	if msg.Channel == string(message.MetaSubscribe) {
 		//get useriID
-		gt.UserID = message.Subscription[1:]
-		message.Ext = gt
+		gt.UserID = msg.Subscription[1:]
+		msg.Ext = gt
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"reflect"
 	"runtime"
 	"sync"
 	"testing"
@@ -21,11 +22,15 @@ var once sync.Once
 
 var unauthorizedErr = errors.New("500::unauthorized channel")
 
+func init() {
+	setup(nil)
+}
+
 func setup(t *testing.T) context.CancelFunc {
 
 	//jump to test dir
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	cmd := exec.CommandContext(ctx,
 		"npm", "start")
 	cmd.Stdout = os.Stdout
@@ -33,7 +38,7 @@ func setup(t *testing.T) context.CancelFunc {
 
 	err := cmd.Start()
 	if err != nil {
-		t.Fatal(err)
+		log.Fatal(err)
 	}
 
 	var mcancel context.CancelFunc = func() {
@@ -48,9 +53,6 @@ func setup(t *testing.T) context.CancelFunc {
 }
 
 func TestServerSubscribeAndPublish10Messages(t *testing.T) {
-	shutdown := setup(t)
-
-	defer shutdown()
 
 	debug := extensions.NewDebugExtension(os.Stdout)
 
@@ -62,10 +64,11 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 	var delivered int
 	var done sync.WaitGroup
 	done.Add(10)
-	client.OnPublishResponse("/test", func(message *message.Message) {
-		if !message.Successful {
-			t.Fatalf("failed to send message with id %s", message.Id)
+	client.OnPublishResponse("/test", func(msg *message.Message) {
+		if !msg.Successful {
+			t.Fatalf("failed to send msg with id %s", msg.Id)
 		}
+
 		delivered++
 		done.Done()
 	})
@@ -75,7 +78,7 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = sub.OnMessage(func(data message.Data) {
+		err = sub.OnMessage(func(channel string, data message.Data) {
 			if data != "hello world" {
 				t.Fatalf("expecting: `hello world` got : %s", data)
 			}
@@ -112,9 +115,6 @@ func TestServerSubscribeAndPublish10Messages(t *testing.T) {
 }
 
 func TestSubscribeUnauthorizedChannel(t *testing.T) {
-	shutdown := setup(t)
-
-	defer shutdown()
 
 	debug := extensions.NewDebugExtension(os.Stdout)
 
@@ -132,5 +132,58 @@ func TestSubscribeUnauthorizedChannel(t *testing.T) {
 	}
 
 	t.Fatal("expecting error")
+
+}
+
+func TestWildcardSubscription(t *testing.T) {
+
+	debug := extensions.NewDebugExtension(os.Stdout)
+
+	client, err := NewClient("ws://localhost:8000/faye", WithExtension(debug.InExtension, debug.OutExtension))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var done sync.WaitGroup
+	done.Add(20)
+
+	sub, err := client.Subscribe("/wildcard/**")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var recv = map[string]int{}
+
+	go func() {
+		err := sub.OnMessage(func(channel string, msg message.Data) {
+			done.Done()
+			recv[channel]++
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	//give some time for setup
+	time.Sleep(time.Second)
+
+	for _, channel := range []string{"/wildcard/foo", "/wildcard/bar"} {
+		for i := 0; i < 10; i++ {
+			_, err := client.Publish(channel, "hello world")
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	done.Wait()
+
+	expected := map[string]int{
+		"/wildcard/foo": 10,
+		"/wildcard/bar": 10}
+
+	if !reflect.DeepEqual(recv, expected) {
+		t.Fatal(recv)
+	}
 
 }

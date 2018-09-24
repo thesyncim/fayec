@@ -1,6 +1,7 @@
 package fayec
 
 import (
+	"github.com/thesyncim/faye/internal/dispatcher"
 	"github.com/thesyncim/faye/message"
 	"github.com/thesyncim/faye/subscription"
 	"github.com/thesyncim/faye/transport"
@@ -8,8 +9,9 @@ import (
 )
 
 type options struct {
-	transport transport.Transport
-	tOpts     transport.Options
+	transport     transport.Transport
+	transportOpts transport.Options
+	extensions    message.Extensions
 }
 
 var defaultOpts = options{
@@ -20,7 +22,6 @@ var defaultOpts = options{
 type client interface {
 	Disconnect() error
 	Subscribe(subscription string) (*subscription.Subscription, error)
-	//Unsubscribe(subscription string) error
 	Publish(subscription string, message message.Data) (string, error)
 	OnPublishResponse(subscription string, onMsg func(message *message.Message))
 }
@@ -32,7 +33,8 @@ var _ client = (*Client)(nil)
 
 // Client represents a client connection to an faye server.
 type Client struct {
-	opts options
+	opts       options
+	dispatcher *dispatcher.Dispatcher
 }
 
 //NewClient creates a new faye client with the provided options and connect to the specified url.
@@ -43,16 +45,10 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 		opt(&c.opts)
 	}
 
-	var err error
-	if err = c.opts.transport.Init(url, &c.opts.tOpts); err != nil {
-		return nil, err
-	}
-
-	if err = c.opts.transport.Handshake(); err != nil {
-		return nil, err
-	}
-
-	if err = c.opts.transport.Connect(); err != nil {
+	c.dispatcher = dispatcher.NewDispatcher(url, c.opts.transportOpts, c.opts.extensions)
+	c.dispatcher.SetTransport(c.opts.transport)
+	err := c.dispatcher.Connect()
+	if err != nil {
 		return nil, err
 	}
 
@@ -61,13 +57,13 @@ func NewClient(url string, opts ...Option) (*Client, error) {
 
 //Subscribe informs the server that messages published to that channel are delivered to itself.
 func (c *Client) Subscribe(subscription string) (*subscription.Subscription, error) {
-	return c.opts.transport.Subscribe(subscription)
+	return c.dispatcher.Subscribe(subscription)
 }
 
 //Publish publishes events on a channel by sending event messages, the server MAY  respond to a publish event
 //if this feature is supported by the server use the OnPublishResponse to get the publish status.
 func (c *Client) Publish(subscription string, data message.Data) (id string, err error) {
-	return c.opts.transport.Publish(subscription, data)
+	return c.dispatcher.Publish(subscription, data)
 }
 
 //OnPublishResponse sets the handler to be triggered if the server replies to the publish request.
@@ -75,20 +71,20 @@ func (c *Client) Publish(subscription string, data message.Data) (id string, err
 //ever be triggered.
 //can be used to identify the status of the published request and for example retry failed published requests.
 func (c *Client) OnPublishResponse(subscription string, onMsg func(message *message.Message)) {
-	c.opts.transport.OnPublishResponse(subscription, onMsg)
+	c.dispatcher.OnPublishResponse(subscription, onMsg)
 }
 
 //Disconnect closes all subscriptions and inform the server to remove any client-related state.
 //any subsequent method call to the client object will result in undefined behaviour.
 func (c *Client) Disconnect() error {
-	return c.opts.transport.Disconnect()
+	return c.dispatcher.Disconnect()
 }
 
 //WithOutExtension append the provided outgoing extension to the the default transport options
 //extensions run in the order that they are provided
 func WithOutExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.tOpts.Extensions.Out = append(o.tOpts.Extensions.Out, extension)
+		o.extensions.Out = append(o.extensions.Out, extension)
 	}
 }
 
@@ -96,8 +92,8 @@ func WithOutExtension(extension message.Extension) Option {
 //extensions run in the order that they are provided
 func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 	return func(o *options) {
-		o.tOpts.Extensions.In = append(o.tOpts.Extensions.In, inExt)
-		o.tOpts.Extensions.Out = append(o.tOpts.Extensions.Out, outExt)
+		o.extensions.In = append(o.extensions.In, inExt)
+		o.extensions.Out = append(o.extensions.Out, outExt)
 	}
 }
 
@@ -105,7 +101,7 @@ func WithExtension(inExt message.Extension, outExt message.Extension) Option {
 //extensions run in the order that they are provided
 func WithInExtension(extension message.Extension) Option {
 	return func(o *options) {
-		o.tOpts.Extensions.In = append(o.tOpts.Extensions.In, extension)
+		o.extensions.In = append(o.extensions.In, extension)
 	}
 }
 

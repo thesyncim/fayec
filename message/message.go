@@ -86,7 +86,9 @@ func (a *Advise) MarshalJSON() ([]byte, error) {
 		MultipleClients bool     `json:"multiple-clients,omitempty"`
 		Hosts           []string `json:"hosts,omitempty"`
 	}
+
 	var builder bytes.Buffer
+
 	err := json.NewEncoder(&builder).Encode(jsonStruct{
 		Reconnect:       string(a.Reconnect),
 		Interval:        int64(a.Interval / time.Millisecond),
@@ -96,7 +98,6 @@ func (a *Advise) MarshalJSON() ([]byte, error) {
 	})
 
 	return builder.Bytes(), err
-
 }
 
 func (a *Advise) UnmarshalJSON(b []byte) error {
@@ -105,18 +106,22 @@ func (a *Advise) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+
 	reconnect, ok := raw["reconnect"]
 	if ok {
 		a.Reconnect = Reconnect(reconnect.(string))
 	}
+
 	interval, ok := raw["interval"]
 	if ok {
 		a.Interval = time.Duration(interval.(float64)) * time.Millisecond
 	}
+
 	timeout, ok := raw["timeout"]
 	if ok {
 		a.Timeout = time.Duration(timeout.(float64)) * time.Millisecond
 	}
+
 	mc, ok := raw["multiple-clients"]
 	if ok {
 		a.MultipleClients = mc.(bool)
@@ -128,4 +133,52 @@ func (a *Advise) UnmarshalJSON(b []byte) error {
 	}
 
 	return nil
+}
+func IsEventDelivery(msg *Message) bool {
+	if IsMetaMessage(msg) {
+		return false
+	}
+	if msg.Data != nil {
+		return true
+	}
+	return false
+}
+
+//MetaMessage are channels commencing with the /meta/ segment ans, are the channels used by the faye protocol itself.
+type MetaMessage = string
+
+const (
+	MetaSubscribe   MetaMessage = "/meta/subscribe"
+	MetaConnect     MetaMessage = "/meta/connect"
+	MetaDisconnect  MetaMessage = "/meta/disconnect"
+	MetaUnsubscribe MetaMessage = "/meta/unsubscribe"
+	MetaHandshake   MetaMessage = "/meta/handshake"
+)
+
+//EventMessage are published in event messages sent from a faye client to a faye server
+//and are delivered in event messages sent from a faye server to a faye client.
+type EventMessage = int
+
+const (
+	//
+	EventPublish EventMessage = iota
+	EventDelivery
+)
+
+var metaMessages = []MetaMessage{MetaSubscribe, MetaConnect, MetaUnsubscribe, MetaHandshake, MetaDisconnect}
+
+func IsMetaMessage(msg *Message) bool {
+	for i := range metaMessages {
+		if msg.Channel == metaMessages[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func IsEventPublish(msg *Message) bool {
+	if IsMetaMessage(msg) {
+		return false
+	}
+	return !IsEventDelivery(msg)
 }
